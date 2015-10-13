@@ -1,0 +1,13 @@
+digraph jitterbug {
+
+  orphan [label="Orphan"];
+  leader [label="Leader"];
+  waiter [label="Waiter"];
+
+  orphan -> leader [label="*token_restore*"];
+  orphan -> waiter [label="*token_restore*"];
+  waiter -> orphan [label="{renew_timeout}"];
+  leader -> waiter [label="token passed"];
+  waiter -> leader [label="token received"];
+
+}
