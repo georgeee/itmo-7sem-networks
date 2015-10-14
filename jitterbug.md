@@ -160,7 +160,6 @@ More detailed, for a single candidate:
             1. candidate compares (using decision function) received data with it's data variable
             2. if self data is decided as less valuable, data and token_id variables are updated with received values
             3. candidate switches to leader state
-      3. Leader updates node_list variable with updated penalties (see bellow)
       4. **return true**
   1. Timeut ticked, **return false**
 
@@ -169,6 +168,7 @@ Aforementioned algo is repeatedly tried for all candidates in turn (following no
 #### Candidate selection and penalties
 
 Every node locally stores a list of penalties for each node, participating in communication. Initially for every node:
+
   * penalty_threshold = 0
   * penalty_count = 0
 
@@ -182,7 +182,7 @@ First, we check for is candidate allowed to participate in current round:
   1. Leader computes new data from data variable, updates data variable
   2. for every `candidate_i`
       0. is_allowed_for_round = true
-      1. if (penalty_count_i >= 2^penalty_threshold_i)
+      1. if (penalty_count_i >= 2^penalty_threshold_i - 1)
           1. candidate was disallowed for enough time
           2. update: penalty_count_i = 0
       2. else
