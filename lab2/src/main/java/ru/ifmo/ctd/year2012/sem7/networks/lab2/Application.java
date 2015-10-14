@@ -21,9 +21,6 @@ public class Application implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(Application.class);
 
     @Autowired
-    private AppSettings appSettings;
-
-    @Autowired
     private JitterbugSettings jitterbugSettings;
 
     public static void main(String[] args) throws Exception {
