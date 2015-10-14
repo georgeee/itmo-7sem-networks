@@ -1,6 +1,8 @@
 package ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug;
 
+import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.util.Set;
 
 public interface Settings<D extends Data<D>> {
     NetworkInterface getNetworkInterface();
@@ -13,7 +15,19 @@ public interface Settings<D extends Data<D>> {
 
     D getInitialData();
 
-    int getTRInitTimeout();
+    int getTrInitTimeout();
 
-    int getTPTimeout();
+    int getTpTimeout();
+
+    Set<InetAddress> getSelfAddresses();
+
+    InetAddress getSelfAddress();
+
+    int getTr1Delay();
+
+    int getTr1Repeat();
+
+    default int getTrPhaseTimeout(){
+        return getTr1Delay() * getTr1Repeat();
+    }
 }

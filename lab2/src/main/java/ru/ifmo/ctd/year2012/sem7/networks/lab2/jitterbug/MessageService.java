@@ -7,12 +7,16 @@ import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 class MessageService<D extends Data<D>> {
     static final byte PROTOCOL_VERSION = 1;
     private static final Logger log = LoggerFactory.getLogger(MessageService.class);
     private final Context<D> context;
     private final DatagramSocket udpSendSocket;
+    private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
 
     public MessageService(Context<D> context) throws SocketException {
         this.context = context;
@@ -99,14 +103,24 @@ class MessageService<D extends Data<D>> {
         return (byte) (PROTOCOL_VERSION | (type.getCode() << 4));
     }
 
-    public void sendTR1Message(int tokenId) throws IOException {
-        ByteArrayOutputStream bas = new ByteArrayOutputStream(7);
-        DataOutputStream dos = new DataOutputStream(bas);
-        dos.write(getTypeProtocolByte(MessageType.TR1));
-        dos.writeInt(tokenId);
-        dos.writeShort(context.getTcpPort());
-        dos.flush();
-        sendUDPMessage(null, bas.toByteArray());
+    public void sendTR1MessageRepeatedly(int tokenId) {
+        sendTR1Message(tokenId, context.getSettings().getTr1Repeat());
+    }
+
+    private void sendTR1Message(int tokenId, int repeatsRemained) {
+        int delay = context.getSettings().getTr1Delay();
+        try {
+            ByteArrayOutputStream bas = new ByteArrayOutputStream(7);
+            DataOutputStream dos = new DataOutputStream(bas);
+            dos.write(getTypeProtocolByte(MessageType.TR1));
+            dos.writeInt(tokenId);
+            dos.writeShort(context.getSelfTcpPort());
+            dos.flush();
+            sendUDPMessage(null, bas.toByteArray());
+        } catch (IOException e) {
+            log.warn("Error sending TR1 message: tokenId={} repeat#={}", tokenId, repeatsRemained);
+        }
+        scheduledExecutor.schedule(() -> sendTR1Message(tokenId, repeatsRemained - 1), delay, TimeUnit.MILLISECONDS);
     }
 
     public void sendTR2Message(InetAddress destination, int tokenId) throws IOException {

@@ -19,7 +19,9 @@ class Context<D extends Data<D>> {
     private final TPListener<D> tpListener;
     private final Processor<D> processor;
     @Getter
-    private final int tcpPort;
+    private final int selfTcpPort;
+    @Getter
+    private final Node selfNode;
 
     public Context(Settings<D> settings) throws IOException {
         this.settings = settings;
@@ -27,7 +29,8 @@ class Context<D extends Data<D>> {
         executor = Executors.newFixedThreadPool(settings.getExecutorPoolSize());
         DatagramSocket datagramSocket = new DatagramSocket(settings.getUdpPort());
         ServerSocket serverSocket = new ServerSocket();
-        tcpPort = serverSocket.getLocalPort();
+        selfTcpPort = serverSocket.getLocalPort();
+        selfNode = new Node(settings.getSelfAddress(), selfTcpPort);
         trListener = new TRListener<>(this, datagramSocket);
         tpListener = new TPListener<>(this, serverSocket);
         processor = new Processor<>(this);

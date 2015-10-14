@@ -9,29 +9,51 @@ import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Data;
 import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Settings;
 
 import javax.annotation.PostConstruct;
-import java.net.InterfaceAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
+import java.net.*;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class JitterbugSettings implements Settings {
     private static final Logger log = LoggerFactory.getLogger(JitterbugSettings.class);
     @Getter
-    @Value("${jitterbug.udp.port:30041}")
+    @Value("${jitterbug.udpPort:30041}")
     private int udpPort;
     @Getter
     private NetworkInterface networkInterface;
     @Getter
-    @Value("${jitterbug.udp.iface:}")
+    @Value("${jitterbug.iface:}")
     private String interfaceName;
     @Getter
-    @Value("${jitterbug.queue.capacity:20}")
+    @Value("${jitterbug.queueCapacity:20}")
     private int queueCapacity;
     @Getter
-    @Value("${jitterbug.executor.poolSize:5}")
+    @Value("${jitterbug.executorPoolSize:5}")
     private int executorPoolSize;
+
+    @Value("${jitterbug.preferIPv6:false}")
+    private boolean preferIPv6;
+
+    @Getter
+    @Value("${jitterbug.trInitTimeout:3000}")
+    private int trInitTimeout;
+    @Getter
+    @Value("${jitterbug.tpTimeout:1000}")
+    private int tpTimeout;
+    @Getter
+    @Value("${jitterbug.tr1Delay:200}")
+    private int tr1Delay;
+    @Getter
+    @Value("${jitterbug.tr1Repeat:5}")
+    private int tr1Repeat;
+
+    @Getter
+    private InetAddress selfAddress;
+
+    @Getter
+    private Set<InetAddress> selfAddresses;
 
     @Override
     public Data getInitialData() {
@@ -44,9 +66,8 @@ public class JitterbugSettings implements Settings {
             Enumeration<NetworkInterface> ifaceEnumeration = NetworkInterface.getNetworkInterfaces();
             while (ifaceEnumeration.hasMoreElements()) {
                 NetworkInterface iface = ifaceEnumeration.nextElement();
-                if (interfaceName.equals(iface.getDisplayName())) {
+                if (networkInterface == null && interfaceName.equals(iface.getDisplayName())) {
                     networkInterface = iface;
-                    break;
                 }
             }
         } catch (SocketException e) {
@@ -58,5 +79,36 @@ public class JitterbugSettings implements Settings {
                 throw new IllegalStateException("Empty interface address list");
             }
         }
+        selfAddress = computeSelfAddress();
+        selfAddresses = computeSelfAddresses();
+    }
+
+    private Set<InetAddress> computeSelfAddresses() {
+        Set<InetAddress> addresses = new HashSet<>();
+        for (InterfaceAddress ifaceAddr : getNetworkInterface().getInterfaceAddresses()) {
+            addresses.add(ifaceAddr.getAddress());
+        }
+        return addresses;
+    }
+
+    private InetAddress computeSelfAddress() {
+        InetAddress result = null;
+        for (InterfaceAddress ifaceAddr : getNetworkInterface().getInterfaceAddresses()) {
+            InetAddress address = ifaceAddr.getAddress();
+            if (result == null) {
+                result = address;
+            } else {
+                if (preferIPv6) {
+                    if (result instanceof Inet4Address && address instanceof Inet6Address) {
+                        result = address;
+                    }
+                } else {
+                    if (result instanceof Inet6Address && address instanceof Inet4Address) {
+                        result = address;
+                    }
+                }
+            }
+        }
+        return result;
     }
 }

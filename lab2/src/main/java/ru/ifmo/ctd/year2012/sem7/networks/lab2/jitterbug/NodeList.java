@@ -7,11 +7,28 @@ import java.util.*;
 
 class NodeList implements Iterable<Node> {
     private static final int BASE = 577;
-    private final List<Node> nodeList = new ArrayList<>();
-    private volatile int hash;
-    private final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    private final List<Node> nodeList;
+    private int hash;
+    private final ByteArrayOutputStream baos;
 
-    public synchronized void add(Node node) {
+    public int size() {
+        return nodeList.size();
+    }
+
+    public boolean isEmpty() {
+        return nodeList.isEmpty();
+    }
+
+    public Node get(int index) {
+        return nodeList.get(index);
+    }
+
+    public NodeList() {
+        nodeList = new ArrayList<>();
+        baos = new ByteArrayOutputStream();
+    }
+
+    public void add(Node node) {
         InetAddress address = node.getAddress();
         byte[] addressBytes = address.getAddress();
         byte meta = 0;
@@ -28,7 +45,7 @@ class NodeList implements Iterable<Node> {
     }
 
     @Override
-    public synchronized Iterator<Node> iterator() {
+    public Iterator<Node> iterator() {
         return nodeList.iterator();
     }
 
@@ -40,7 +57,7 @@ class NodeList implements Iterable<Node> {
     }
 
 
-    public synchronized byte[] getBytes() {
+    public byte[] getBytes() {
         return baos.toByteArray();
     }
 
@@ -48,17 +65,18 @@ class NodeList implements Iterable<Node> {
         return hash;
     }
 
-    private synchronized void clear() {
+    private void clear() {
         hash = 0;
         baos.reset();
         nodeList.clear();
     }
 
-    public synchronized Set<Node> replace(List<Node> newNodes) {
+    public Set<Node> replace(List<Node> newNodes) {
         Set<Node> oldNodes = new HashSet<>(nodeList);
         oldNodes.removeAll(newNodes);
         clear();
         newNodes.stream().forEach(this::add);
         return oldNodes;
     }
+
 }
