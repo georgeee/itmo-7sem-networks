@@ -9,7 +9,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 
 class TRListener<D extends Data<D>> extends Thread implements TRHandler {
-    private final static Logger log = LoggerFactory.getLogger(TRListener.class);
+    private static final Logger log = LoggerFactory.getLogger(TRListener.class);
 
     private final Context<D> context;
     private final DatagramSocket socket;

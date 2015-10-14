@@ -12,4 +12,8 @@ public interface Settings<D extends Data<D>> {
     int getQueueCapacity();
 
     D getInitialData();
+
+    int getTRInitTimeout();
+
+    int getTPTimeout();
 }

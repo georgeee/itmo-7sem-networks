@@ -18,7 +18,7 @@ import java.util.Enumeration;
 
 @SpringBootApplication
 public class Application implements CommandLineRunner {
-    private final static Logger log = LoggerFactory.getLogger(Application.class);
+    private static final Logger log = LoggerFactory.getLogger(Application.class);
 
     @Autowired
     private AppSettings appSettings;

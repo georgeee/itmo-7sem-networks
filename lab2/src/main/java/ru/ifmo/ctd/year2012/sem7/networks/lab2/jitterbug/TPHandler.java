@@ -22,7 +22,7 @@ abstract class TPHandler {
         throw new ParseException("TP4 message not expected");
     }
 
-    public void handleTP5(int tokenId, ObjectInputStream dataStream) throws IOException, ParseException {
-        throw new ParseException("TP5 message not expected: tokenId=" + tokenId);
+    public void handleTP5(ObjectInputStream dataStream) throws IOException, ParseException {
+        throw new ParseException("TP5 message not expected");
     }
 }

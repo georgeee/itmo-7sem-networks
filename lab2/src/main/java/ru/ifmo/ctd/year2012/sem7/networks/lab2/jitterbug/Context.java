@@ -7,7 +7,6 @@ import java.net.DatagramSocket;
 import java.net.ServerSocket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 class Context<D extends Data<D>> {
     @Getter
@@ -16,8 +15,6 @@ class Context<D extends Data<D>> {
     private final MessageService<D> messageService;
     @Getter
     private final ExecutorService executor;
-    @Getter
-    private final ScheduledExecutorService scheduledExecutor;
     private final TRListener<D> trListener;
     private final TPListener<D> tpListener;
     private final Processor<D> processor;
@@ -34,7 +31,6 @@ class Context<D extends Data<D>> {
         trListener = new TRListener<>(this, datagramSocket);
         tpListener = new TPListener<>(this, serverSocket);
         processor = new Processor<>(this);
-        scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     }
 
     State<D> getState() {
