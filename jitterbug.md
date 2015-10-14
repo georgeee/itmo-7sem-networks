@@ -149,7 +149,6 @@ More detailed, for a single candidate:
 #### *token_pass_for_candidate ( candidate_i )*:
 
   0. Execute within timeout {token_pass_timeout}
-      1. Leader computes new data from data variable, updates data variable
       2. Leader passes message < TP1, token_id, node_list_hash > to candidate
             1. candidate checks node_list_hash with hash of his node list and replies:
             2. < TP2 >, if hashs differ
@@ -178,21 +177,26 @@ Let's consider candidate selection procedure. Assume we want to try candidate wi
 
 First, we check for is candidate allowed to participate in current round:
 
-  0. is_allowed_for_round = true
-  1. if (penalty_count_i >= 2^penalty_threshold_i)
-      1. candidate was disallowed for enough time
-      2. update: penalty_count_i = 0
-  2. else
-      1. is_allowed_for_round = false
-  3. if (is_allowed_for_round)
-      1. res = **token_pass_for_candidate** ( candidate_i )
-      2. if (res)
-          1. if (penalty_threshold_i > 0) penalty_threshold_i--
-      3. else
-          1. penalty_threshold_i++
-  4. else
-      1. penalty_count_i++
-  5. node switches to waiter state
+**token_pass**:
+
+  1. Leader computes new data from data variable, updates data variable
+  2. for every `candidate_i`
+      0. is_allowed_for_round = true
+      1. if (penalty_count_i >= 2^penalty_threshold_i)
+          1. candidate was disallowed for enough time
+          2. update: penalty_count_i = 0
+      2. else
+          1. is_allowed_for_round = false
+      3. if (is_allowed_for_round)
+          1. res = **token_pass_for_candidate** ( candidate_i )
+          2. if (res)
+              1. if (penalty_threshold_i > 0) penalty_threshold_i--
+              2. break;
+          3. else
+              1. penalty_threshold_i++
+      4. else
+          1. penalty_count_i++
+  3. node switches to waiter state
 
 ## Decision function
 
@@ -223,6 +227,7 @@ Rest bytes of each message should be encoded in following format:
   * TR1
     1. token_id
     2. node_tcp_port
+    3. receiver_list_idx
   * TR2
     1. token_id
   * TP1
