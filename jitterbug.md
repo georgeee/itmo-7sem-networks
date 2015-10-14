@@ -149,20 +149,20 @@ More detailed, for a single candidate:
 #### *token_pass_for_candidate ( candidate_i )*:
 
   0. Execute within timeout {token_pass_timeout}
-    1. Leader computes new data from data variable, updates data variable
-    1. Leader passes message < TP1, token_id, node_list_hash > to candidate
-        1. candidate checks node_list_hash with hash of his node list and replies:
-           1. < TP2 >, if hashs differ
-              1. Leader sends message < TP4, node_list >
-              2. Candidate remembers node_list for the connection (but doesn't update variables)
-           2. < TP3 >, if hashs are equal. This case, candidate remembers node_list for the connection
-    2. Leader passes a message < TP5, token_id, data > to candidate
-        * token was passed
-        1. candidate compares (using decision function) received data with it's data variable
-        2. if self data is decided as less valuable, data and token_id variables are updated with received values
-        3. candidate switches to leader state
-    3. Leader updates node_list variable with updated penalties (see bellow)
-    4. **return true**
+      1. Leader computes new data from data variable, updates data variable
+      2. Leader passes message < TP1, token_id, node_list_hash > to candidate
+            1. candidate checks node_list_hash with hash of his node list and replies:
+            2. < TP2 >, if hashs differ
+               1. Leader sends message < TP4, node_list >
+               2. Candidate remembers node_list for the connection (but doesn't update variables)
+            3. < TP3 >, if hashs are equal. This case, candidate remembers node_list for the connection
+      3. Leader passes a message < TP5, data > to candidate
+            0. token was passed
+            1. candidate compares (using decision function) received data with it's data variable
+            2. if self data is decided as less valuable, data and token_id variables are updated with received values
+            3. candidate switches to leader state
+      3. Leader updates node_list variable with updated penalties (see bellow)
+      4. **return true**
   1. Timeut ticked, **return false**
 
 Aforementioned algo is repeatedly tried for all candidates in turn (following node list from current node). We will describe this in detail after describing penalties (which play a key role in process of candidate selection).
@@ -235,8 +235,7 @@ Rest bytes of each message should be encoded in following format:
   * TP4
     1. node_list
   * TP5
-    1. token_id
-    2. data
+    1. data
 
 In above:
 
@@ -258,8 +257,19 @@ In above:
        * port, 2 bytes
   * node_list_hash - 4-byte integer
     * standard polynomial hash on base of 577 of node_list bytes
+    * bytes should be taken as signed (i.e. -128..127)
+    * refer to code bellow
   * data - data to send, application-provided array of bytes
     * size of data isn't defined anyhow, it's up to application to handle it if needed
+
+### Code for hash function
+
+        byte[] bytes = (..);
+        int hash = 0;
+        for(byte b : bytes){
+          hash = hash * 577 + b;
+        }
+
 
 ## Appendix A
 
