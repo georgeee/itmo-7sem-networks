@@ -5,33 +5,40 @@ import java.io.IOException;
 public class Jitterbug<D extends Data<D>> {
 
     private final Settings<D> settings;
-    private volatile Context<D> context;
+    private Context<D> context;
+    private final Object monitor = new Object();
 
     public Jitterbug(Settings<D> settings) {
         this.settings = settings;
     }
 
-    public synchronized boolean start() throws IOException {
-        if (context == null) {
-            context = new Context<>(settings);
-            context.start();
-            return true;
+    public boolean start() throws IOException {
+        synchronized (monitor) {
+            if (context == null) {
+                context = new Context<>(settings);
+                context.start();
+                return true;
+            }
         }
         return false;
     }
 
-    public synchronized boolean stop() {
-        if (context != null) {
-            context.stop();
-            context.notifyAll();
-            return true;
+    public boolean stop() {
+        synchronized (monitor) {
+            if (context != null) {
+                context.stop();
+                monitor.notifyAll();
+                return true;
+            }
         }
         return false;
     }
 
-    public synchronized void awaitTermination() throws InterruptedException {
-        if (context != null) {
-            context.wait();
+    public void awaitTermination() throws InterruptedException {
+        synchronized (monitor) {
+            if (context != null) {
+                monitor.wait();
+            }
         }
     }
 }

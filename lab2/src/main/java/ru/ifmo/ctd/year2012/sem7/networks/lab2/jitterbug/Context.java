@@ -28,7 +28,7 @@ class Context<D extends Data<D>> {
         messageService = new MessageService<>(this);
         executor = Executors.newFixedThreadPool(settings.getExecutorPoolSize());
         DatagramSocket datagramSocket = new DatagramSocket(settings.getUdpPort());
-        ServerSocket serverSocket = new ServerSocket();
+        ServerSocket serverSocket = new ServerSocket(0);
         selfTcpPort = serverSocket.getLocalPort();
         selfNode = new Node(settings.getSelfAddress(), selfTcpPort);
         trListener = new TRListener<>(this, datagramSocket);

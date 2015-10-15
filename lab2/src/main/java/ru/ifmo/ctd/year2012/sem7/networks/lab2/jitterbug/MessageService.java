@@ -108,24 +108,30 @@ class MessageService<D extends Data<D>> {
     }
 
     private void sendTR1Message(int tokenId, int repeatsRemained) {
+        log.info("Sending TR1 message tokenId={} repeatsRemained={}", tokenId, repeatsRemained);
         int delay = context.getSettings().getTr1Delay();
         try {
             ByteArrayOutputStream bas = new ByteArrayOutputStream(7);
-            DataOutputStream dos = new DataOutputStream(bas);
+            ObjectOutputStream dos = new ObjectOutputStream(bas);
+            log.debug("Sending versionType {}", getTypeProtocolByte(MessageType.TR1));
             dos.write(getTypeProtocolByte(MessageType.TR1));
             dos.writeInt(tokenId);
             dos.writeShort(context.getSelfTcpPort());
             dos.flush();
             sendUDPMessage(null, bas.toByteArray());
         } catch (IOException e) {
-            log.warn("Error sending TR1 message: tokenId={} repeat#={}", tokenId, repeatsRemained);
+            log.warn("Error sending TR1 message: tokenId={} repeatsRemained={}", tokenId, repeatsRemained);
         }
-        scheduledExecutor.schedule(() -> sendTR1Message(tokenId, repeatsRemained - 1), delay, TimeUnit.MILLISECONDS);
+        if(repeatsRemained > 0) {
+            scheduledExecutor.schedule(() -> sendTR1Message(tokenId, repeatsRemained - 1), delay, TimeUnit.MILLISECONDS);
+        }
     }
 
     public void sendTR2Message(InetAddress destination, int tokenId) throws IOException {
+        log.info("Sending TR2 message tokenId={} dest={}", tokenId, destination);
         ByteArrayOutputStream bas = new ByteArrayOutputStream(5);
-        DataOutputStream dos = new DataOutputStream(bas);
+        ObjectOutputStream dos = new ObjectOutputStream(bas);
+        log.debug("Sending versionType {}", getTypeProtocolByte(MessageType.TR2));
         dos.write(getTypeProtocolByte(MessageType.TR2));
         dos.writeInt(tokenId);
         dos.flush();
@@ -151,11 +157,12 @@ class MessageService<D extends Data<D>> {
     private MessageType readType(ObjectInputStream ois) throws ParseException {
         try {
             int versionType = ois.readUnsignedByte();
+            log.debug("Received versionType {}", versionType);
             int version = versionType & 0xF;
             if (PROTOCOL_VERSION != version) {
                 throw new ParseException("Version mismatch: " + version + " not supported (current version: " + MessageService.PROTOCOL_VERSION + ")");
             }
-            int typeCode = versionType & 0xF0;
+            int typeCode = (versionType & 0xF0) >> 4;
             MessageType type = MessageType.forCode(typeCode);
             if (type == null) {
                 throw new ParseException("Unknown type code: " + typeCode);

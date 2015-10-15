@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Data;
 import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Settings;
 
 import javax.annotation.PostConstruct;
@@ -16,7 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 @Service
-public class JitterbugSettings implements Settings {
+public class JitterbugSettings implements Settings<PiComputation> {
     private static final Logger log = LoggerFactory.getLogger(JitterbugSettings.class);
     @Getter
     @Value("${jitterbug.udpPort:30041}")
@@ -56,7 +55,7 @@ public class JitterbugSettings implements Settings {
     private Set<InetAddress> selfAddresses;
 
     @Override
-    public Data getInitialData() {
+    public PiComputation getInitialData() {
         return new PiComputation();
     }
 

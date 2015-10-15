@@ -45,7 +45,7 @@ public class Application implements CommandLineRunner {
             }
             return;
         }
-        Jitterbug jitterbug = new Jitterbug(jitterbugSettings);
+        Jitterbug jitterbug = new Jitterbug<>(jitterbugSettings);
         jitterbug.start();
         try {
             jitterbug.awaitTermination();

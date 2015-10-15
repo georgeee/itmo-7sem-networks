@@ -146,6 +146,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
     }
 
     private boolean actAsLeader() {
+        log.info("Processing as leader");
         data = data.next();
         addQueue.stream().forEach(nodeList::add);
         int selfIndex = locateSelf();

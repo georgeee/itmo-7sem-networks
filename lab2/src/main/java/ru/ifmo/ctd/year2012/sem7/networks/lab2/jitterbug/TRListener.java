@@ -36,8 +36,7 @@ class TRListener<D extends Data<D>> extends Thread implements TRHandler {
                     try {
                         context.getMessageService().handleTRMessage(packet, this);
                     } catch (ParseException e) {
-                        log.warn("Error trying to parse message");
-                        log.debug("Error trying to parse message {}", packet.getData());
+                        log.warn("Error trying to parse message", e);
                     } catch (IOException e) {
                         log.info("IO error occurred", e);
                     }
