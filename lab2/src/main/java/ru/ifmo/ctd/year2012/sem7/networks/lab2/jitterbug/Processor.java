@@ -34,7 +34,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
     private volatile boolean trInProgress;
     private volatile boolean tr2ReceivedGreater;
 
-    private Map<Node, Penalty> penalties = new HashMap<>();
+    private Map<Integer, Penalty> penalties = new HashMap<>();
 
     @Getter
     private volatile D data;
@@ -105,6 +105,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             }
             if (event instanceof TPReceivedEvent) {
                 lastLivenessEventTime = System.currentTimeMillis();
+                log.debug("Socket connection received");
                 trInProgress = false;
                 InetAddress remoteAddress = null;
                 boolean processedTokenPass = false;
@@ -116,12 +117,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     log.info("Exception caught while communicating through socket: address={}", remoteAddress, e);
                 }
                 if (processedTokenPass) {
-                    boolean leaderShipPassed = false;
-                    while (!leaderShipPassed) {
-                        leaderShipPassed = actAsLeader();
-                        lastLivenessEventTime = System.currentTimeMillis();
-                    }
-                    tokenId = -tokenId;
+                    actAsLeader();
                 }
             } else if (event instanceof TRInitiateEvent) {
                 if (!trInProgress && needTokenRestore()) {
@@ -132,24 +128,26 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     scheduledExecutor.schedule(() -> eventQueue.add(new TRPhase1Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
                 }
             } else if (event instanceof TRPhase1Event) {
-                if (trInProgress && !tr2ReceivedGreater) {
-                    int oldTokenId = tokenId;
-                    tokenId = generateTokenId();
-                    log.info("[TR phase1] Generated new token id: oldTokenId={} newTokenId={}", oldTokenId, tokenId);
-                    tr2ReceivedGreater = false;
-                    messageService.sendTR1MessageRepeatedly(tokenId);
-                    scheduledExecutor.schedule(() -> eventQueue.add(new TRPhase2Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
+                if (trInProgress) {
+                    if (!tr2ReceivedGreater) {
+                        int oldTokenId = tokenId;
+                        tokenId = generateTokenId();
+                        log.info("[TR phase1] Generated new token id: oldTokenId={} newTokenId={}", oldTokenId, tokenId);
+                        tr2ReceivedGreater = false;
+                        messageService.sendTR1MessageRepeatedly(tokenId);
+                        scheduledExecutor.schedule(() -> eventQueue.add(new TRPhase2Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
+                    } else {
+                        log.info("[TR phase1] Received greater tokenId, aborting TR procedure");
+                    }
                 }
             } else if (event instanceof TRPhase2Event) {
-                if (trInProgress && !tr2ReceivedGreater) {
-                    tokenId = -tokenId;
-                    log.info("[TR phase2] Became a leader, tokenId={}", tokenId);
-                    while (!actAsLeader()) {
-                        if (Thread.interrupted()) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                        log.info("Token not passed, repeating as leader...");
+                if (trInProgress) {
+                    if (!tr2ReceivedGreater) {
+                        tokenId = -tokenId;
+                        log.info("[TR phase2] Became a leader, tokenId={}", tokenId);
+                        actAsLeader();
+                    } else {
+                        log.info("[TR phase2] Received greater tokenId, aborting TR procedure");
                     }
                 }
             }
@@ -157,7 +155,21 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
     }
 
     private boolean actAsLeader() {
-        log.info("Processing as leader");
+        while (!actAsLeaderPhase()) {
+            if (Thread.interrupted()) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            lastLivenessEventTime = System.currentTimeMillis();
+            log.info("Token not passed, repeating as leader...");
+        }
+        log.info("Token passed, switching to waiter state");
+        tokenId = -tokenId;
+        return true;
+    }
+
+    private boolean actAsLeaderPhase() {
+        log.info("Processing as leader: tokenId = {}", tokenId);
         long dataComputationDelay = context.getSettings().getDataComputationDelay();
         if (dataComputationDelay > 0) {
             try {
@@ -170,6 +182,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         log.info("Computed next data: {}", data);
         addQueue.stream().forEach(nodeList::add);
         int selfIndex = nodeList.getByHostId(context.getHostId());
+        log.info("Trying to pass token");
         boolean tokenPassed = false;
         for (int i = selfIndex + 1; i < nodeList.size() && !tokenPassed; ++i) {
             tokenPassed = tokenPassForCandidate(i);
@@ -182,20 +195,24 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
 
     private boolean tokenPassForCandidate(int i) {
         Node candidate = nodeList.get(i);
+        log.debug("Trying candidate #{}, {}", i, candidate);
         if (candidate.getHostId() == context.getHostId()) {
             return false;
         }
-        Penalty penalty = penalties.computeIfAbsent(candidate, n -> new Penalty());
+        Penalty penalty = penalties.computeIfAbsent(candidate.getHostId(), n -> new Penalty());
         if (penalty.count < (1 << penalty.threshold) - 1) {
+            log.debug("Candidate omitted due to penalties: {}/{} passed", penalty.count, (1 << penalty.threshold) - 1);
             penalty.count++;
         } else {
             //Allowed for round
             penalty.count = 0;
             if (tokenPassForCandidateImpl(candidate)) {
                 penalty.decThreshold();
+                log.debug("Token successfully passed");
                 return true;
             } else {
                 penalty.incThreshold();
+                log.debug("Token not passed");
             }
         }
         return false;
@@ -262,8 +279,9 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         void process() throws IOException, ParseException {
             messageService.handleTPMessage(dis, new TPHandler() {
                 @Override
-                public void handleTP1(int tokenId, int nodeListHash) throws IOException, ParseException {
-                    newTokenId = tokenId;
+                public void handleTP1(int newTokenId1, int nodeListHash) throws IOException, ParseException {
+                    newTokenId = newTokenId1;
+                    log.info("[TokenPass] Procedure started: newTokenId={} oldTokenId={}", newTokenId, tokenId);
                     if (nodeListHash == nodeList.getHash()) {
                         messageService.sendTP3Message(dos);
                     } else {
@@ -283,6 +301,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     newData = data.readFromStream(dis);
                 }
             });
+            log.info("[TokenPass] Procedure started: newTokenId={} oldTokenId={}", newTokenId, tokenId);
             if (newTokenId == tokenId) {
                 newData = data;
             } else {
@@ -297,6 +316,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             if (tokenId < 0) {
                 tokenId = -tokenId;
             }
+            log.info("[TokenPass] Procedure performed, switched to leader state: tokenId={}", tokenId);
         }
     }
 

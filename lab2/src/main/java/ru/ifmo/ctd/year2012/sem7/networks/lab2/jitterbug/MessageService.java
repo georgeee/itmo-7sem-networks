@@ -38,19 +38,24 @@ class MessageService<D extends Data<D>> {
                 } catch (IOException e) {
                     throw new ParseException(e);
                 }
+                log.info("Received TP1 with tokenId={} nodeListHash={}", tokenId, nodeListHash);
                 handler.handleTP1(tokenId, nodeListHash);
             }
             break;
             case TP2:
+                log.info("Received TP2");
                 handler.handleTP2();
                 break;
             case TP3:
+                log.info("Received TP3");
                 handler.handleTP3();
                 break;
             case TP4:
+                log.info("Received TP4");
                 handler.handleTP4(parseNodeList(dis));
                 break;
             case TP5:
+                log.info("Received TP5");
                 handler.handleTP5(dis);
                 break;
         }
@@ -100,6 +105,7 @@ class MessageService<D extends Data<D>> {
                 } catch (BufferUnderflowException e) {
                     throw new ParseException(e);
                 }
+                log.debug("Received TR1 from {} with tokenId={} tcpPort={}", packet.getAddress(), tokenId, tcpPort);
                 trHandler.handleTR1(packet.getAddress(), tokenId, hostId, tcpPort);
             }
             break;
@@ -110,6 +116,7 @@ class MessageService<D extends Data<D>> {
                 } catch (BufferUnderflowException e) {
                     throw new ParseException(e);
                 }
+                log.debug("Received TR2 from {} with tokenId={}", packet.getAddress(), tokenId);
                 trHandler.handleTR2(packet.getAddress(), tokenId);
             }
             break;
@@ -125,7 +132,7 @@ class MessageService<D extends Data<D>> {
     }
 
     private void sendTR1Message(int tokenId, int repeatsRemained) {
-        log.info("Sending TR1 message tokenId={} repeatsRemained={}", tokenId, repeatsRemained);
+        log.debug("Sending TR1 message tokenId={} repeatsRemained={}", tokenId, repeatsRemained);
         int delay = context.getSettings().getTr1Delay();
         try {
             ByteBuffer buffer = ByteBuffer.allocate(32);
@@ -143,7 +150,7 @@ class MessageService<D extends Data<D>> {
     }
 
     public void sendTR2Message(InetAddress destination, int tokenId) throws IOException {
-        log.info("Sending TR2 message tokenId={} dest={}", tokenId, destination);
+        log.debug("Sending TR2 message tokenId={} dest={}", tokenId, destination);
         ByteBuffer buffer = ByteBuffer.allocate(32);
         buffer.put(getTypeProtocolByte(MessageType.TR2));
         buffer.putInt(tokenId);
@@ -187,7 +194,6 @@ class MessageService<D extends Data<D>> {
     }
 
     private MessageType readType(byte versionType) throws ParseException {
-        log.debug("Received versionType {}", versionType);
         int version = versionType & 0xF;
         if (PROTOCOL_VERSION != version) {
             throw new ParseException("Version mismatch: " + version + " not supported (current version: " + MessageService.PROTOCOL_VERSION + ")");
@@ -203,6 +209,7 @@ class MessageService<D extends Data<D>> {
 
 
     public void sendTP1Message(DataOutputStream dos, int tokenId, int nodeListHash) throws IOException {
+        log.debug("Sending TP1 message tokenId={} nodeListHash={}", tokenId, nodeListHash);
         dos.write(getTypeProtocolByte(MessageType.TP1));
         dos.writeInt(tokenId);
         dos.writeInt(nodeListHash);
@@ -210,16 +217,19 @@ class MessageService<D extends Data<D>> {
     }
 
     public void sendTP2Message(DataOutputStream dos) throws IOException {
+        log.debug("Sending TP2");
         dos.write(getTypeProtocolByte(MessageType.TP2));
         dos.flush();
     }
 
     public void sendTP3Message(DataOutputStream dos) throws IOException {
+        log.debug("Sending TP3");
         dos.write(getTypeProtocolByte(MessageType.TP3));
         dos.flush();
     }
 
     public void sendTP4Message(DataOutputStream dos, int nodeListSize, byte[] nodeList) throws IOException {
+        log.debug("Sending TP4");
         dos.write(getTypeProtocolByte(MessageType.TP4));
         dos.writeInt(nodeListSize);
         dos.write(nodeList);
@@ -227,6 +237,7 @@ class MessageService<D extends Data<D>> {
     }
 
     public void sendTP5MessageHeader(DataOutputStream dos) throws IOException {
+        log.debug("Sending TP5");
         dos.write(getTypeProtocolByte(MessageType.TP5));
     }
 }

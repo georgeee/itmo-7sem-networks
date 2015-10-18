@@ -49,7 +49,6 @@ class TRListener<D extends Data<D>> extends Thread implements TRHandler {
 
     @Override
     public void handleTR1(InetAddress senderAddress, int tokenId, int hostId, int senderTcpPort) throws IOException {
-        log.debug("Received TR1 from {} with tokenId={} tcpPort={}", senderAddress, tokenId, senderTcpPort);
         int selfTokenId = context.getState().getTokenId();
         if (selfTokenId > tokenId) {
             context.getMessageService().sendTR2Message(senderAddress, selfTokenId);
@@ -59,7 +58,6 @@ class TRListener<D extends Data<D>> extends Thread implements TRHandler {
 
     @Override
     public void handleTR2(InetAddress senderAddress, int tokenId) {
-        log.debug("Received TR2 from {} with tokenId={}", senderAddress, tokenId);
         context.getState().reportTR2(senderAddress, tokenId);
     }
 

@@ -4,7 +4,7 @@ import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Settings;
 
 import javax.annotation.PostConstruct;
@@ -14,7 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-@Service
+@Component
 public class JitterbugSettings implements Settings<PiComputation> {
     private static final Logger log = LoggerFactory.getLogger(JitterbugSettings.class);
     @Getter
@@ -82,8 +82,10 @@ public class JitterbugSettings implements Settings<PiComputation> {
                 throw new IllegalStateException("Empty interface address list");
             }
         }
-        selfAddress = computeSelfAddress();
-        selfAddresses = computeSelfAddresses();
+        if (getNetworkInterface() != null) {
+            selfAddress = computeSelfAddress();
+            selfAddresses = computeSelfAddresses();
+        }
     }
 
     private Set<InetAddress> computeSelfAddresses() {
