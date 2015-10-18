@@ -18,13 +18,15 @@ It provides following garantees:
       * Dead nodes are handled via penalties
    * Up-to-date version of node list is transferred with token
 
-Also, with proper decision function supplied (see *token_pass* procedure description), algo maintains following out-of-box:
+Generally, protocol maintains a so-called merge/tree graph.
 
- * Sequent calculations without interruptions and downgrades to prior values
-   * Generally, algo tries to maintain a single chain, but eventually extra chains may arise
-   * When structure of ring is modified (merging with other ring with ad-hoc message sequence, token holder death) and there are more than one message sequence, algo correclty decides, which sequence is to be continued
-     * this decision relies on aforementioned decision function, supplied by application
+Let's consider a normal work process: token is passed around the subnet, eventually subnet splits to two or more subnets or these subnets merge back. These merges and splits form a directinal acyclic graph and correctly maintaining this graph is a purpose of Jitterbug protocol.
 
+Core point to achieve this is application-supplied merge function. Protocol uses it when detects a split/merge event two merge two conflicting messages into one.
+
+Note, that merge is applied only when split/merge occurs, normally we only generate new (next) message.
+
+@TODO: token races (i.e. two tokens in subnet, not meeting anywhere, infinitely circulating in subnet)
 
 ## Node states
 
@@ -50,6 +52,9 @@ In each state, node maintains following *state variables* (updated only in node'
 
 All nodes listen to specified (same for all nodes) udp port {udp_port}. Node is free to listen to any tcp port, but it shouldn't be changed during node's lifetime.
 
+Every node has it's unique host_id identifier. It can be either hash of mac address or just a random value. The only restriction for it is to be unique.
+This value is to be used to more easily navigate through node list (without messing around with addresses). Note, that node can possibly have few addresses (e.g. one IPv4 and another IPv6), which isn't a problem as far as it's reachable by every such address.
+
 ### Orphan state
 
 Being orphan means that you are not associated yet with any subnet.
@@ -68,7 +73,7 @@ This procedure requires waiting for replies from other nodes (which are checked 
 
 ### Waiter state
 
-It's a passive state of algo. In this state node waits for either of events to occur:
+It's a passive state of node. In this state node waits for either of events to occur:
   
   * {renew_timeout} occurs, node becomes an orphan
   * token received, node becomes a leader
@@ -92,7 +97,7 @@ It's launched by node, being in orphan state. For sender algo is following:
 
 **token_restore_try** (*tryout_token_id*):
 
-  1. Repeatedly send a UDP broadcast with message < TR1, *tryout_token_id* >
+  1. Repeatedly send a UDP broadcast with message < TR1, *tryout_token_id*, host_id, tcp_port >
       * repeat interval is {tr_interval}
       * should repeat {tr_count} times
   2. Wait {tr_count}*{tr_interval} time for replies
@@ -121,14 +126,14 @@ It's launched by node, being in orphan state. For sender algo is following:
           * switch state to *waiter*
   3. switch state to *waiter*
 
-All other nodes should do following on receiving of < TR1, token_id > (for each message received):
+All other nodes should do following on receiving of < TR1, token_id, host_id, tcp_port > (for each message received):
 
   1. if in leader state, send < TR2, 1, self token_id >
   2. otherwise
       1. if received token_id is greater, than ours, do nothing
       2. otherwise
           1. send < TR2, 0, self token_id > as a reply (via UDP, only to sender's IP address)
-          2. remember node to be later added to node list
+          2. remember node <host_id, ip address, tcp port>  to be later added to node list
 
 See **Appendix A** section for some additional remarks regarding **token_restore** procedure (explanation of why it won't end up into infinite loop).
 
@@ -156,9 +161,12 @@ More detailed, for a single candidate:
                2. Candidate remembers node_list for the connection (but doesn't update variables)
             3. < TP3 >, if hashs are equal. This case, candidate remembers node_list for the connection
       3. Leader passes a message < TP5, data > to candidate
-            0. token was passed
-            1. candidate compares (using decision function) received data with it's data variable
-            2. if self data is decided as less valuable, data and token_id variables are updated with received values
+            1. token was passed
+            2. candidate compares self's token_id value with one receieved
+                1. if they're equal, data variable is updated with received data
+                2. otherwise
+                  1. token_id variable is updated with received token_id
+                  2. data variable is assigned to result of merge of old data and received one
             3. candidate switches to leader state
       4. **return true**
   1. Timeut ticked, **return false**
@@ -198,14 +206,6 @@ First, we check for is candidate allowed to participate in current round:
           1. penalty_count_i++
   3. node switches to waiter state
 
-## Decision function
-
-In algo's description we widely used term "decision function". It's basically a function with following properties:
-
- * decisionFunction :: Data -> Data -> Bool
- * returns true, if first data should be taken as a base for continuing message sequence or false otherwise
- * for holding garantees, mentioned in preface (second group) this function should be pure, i.e. be dependent only on data provided
-
 ## Messages and variables
 
 Message of each type starts with meta-information byte. It contains information about version and type encoded:
@@ -226,8 +226,8 @@ Rest bytes of each message should be encoded in following format:
 
   * TR1
     1. token_id
-    2. node_tcp_port
-    3. receiver_list_idx
+    2. host_id
+    3. tcp_port
   * TR2
     1. token_id
   * TP1
@@ -247,15 +247,14 @@ In above:
   * token_id - 4-byte integer. Meanfull token part (generated in *token_restore*) is stored in 31 bits, leadership is defined by sign:
     * positive value if node is a leader (holds token)
     * negative value otherwise
-  * node_tcp_port - 2-byte integer. Port to which tcp listener is bound
+  * tcp_port - 2-byte integer. Port to which tcp listener is bound
+  * host_id - 4-byte integer with highest (sign) bit not used (viewing host_id as a signed integer, it should be >= 0)
   * node_list
     * 4-byte size of list
     * nodes in format:
-       * 1-byte meta-info
-          * lowest bit, 0 - version of ip to use:
-            * 1 for IPv6
-            * 0 for IPv4
-          * rest of the bits, 1..7 are reserved for future use
+       * signed host_id - 4-byte integer
+          * negative for IPv6 address
+          * positive for IPv4 address
        * ip address
           * 4 bytes for IPv4
           * 16 bytes for IPv6
