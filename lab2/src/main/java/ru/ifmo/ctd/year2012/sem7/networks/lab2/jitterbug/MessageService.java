@@ -3,8 +3,12 @@ package ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.net.*;
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -23,12 +27,20 @@ class MessageService<D extends Data<D>> {
         udpSendSocket = new DatagramSocket();
     }
 
-    public void handleTPMessage(ObjectInputStream ois, TPHandler handler) throws IOException, ParseException {
-        MessageType type = readType(ois);
+    public void handleTPMessage(DataInputStream dis, TPHandler handler) throws IOException, ParseException {
+        MessageType type = readType(dis);
         switch (type) {
-            case TP1:
-                handler.handleTP1(readInt(ois), readInt(ois));
-                break;
+            case TP1: {
+                int tokenId, nodeListHash;
+                try {
+                    tokenId = dis.readInt();
+                    nodeListHash = dis.readInt();
+                } catch (IOException e) {
+                    throw new ParseException(e);
+                }
+                handler.handleTP1(tokenId, nodeListHash);
+            }
+            break;
             case TP2:
                 handler.handleTP2();
                 break;
@@ -36,36 +48,20 @@ class MessageService<D extends Data<D>> {
                 handler.handleTP3();
                 break;
             case TP4:
-                handler.handleTP4(parseNodeList(ois));
+                handler.handleTP4(parseNodeList(dis));
                 break;
             case TP5:
-                handler.handleTP5(ois);
+                handler.handleTP5(dis);
                 break;
         }
     }
 
-    private int readUnsignedShort(ObjectInputStream ois) throws ParseException {
+    private List<Node> parseNodeList(DataInputStream dis) throws ParseException {
         try {
-            return ois.readUnsignedShort();
-        } catch (IOException e) {
-            throw new ParseException(e);
-        }
-    }
-
-    private int readInt(ObjectInputStream ois) throws ParseException {
-        try {
-            return ois.readInt();
-        } catch (IOException e) {
-            throw new ParseException(e);
-        }
-    }
-
-    private List<Node> parseNodeList(ObjectInputStream ois) throws ParseException {
-        try {
-            int size = ois.readInt();
+            int size = dis.readInt();
             List<Node> nodes = new ArrayList<>();
             for (int i = 0; i < size; ++i) {
-                nodes.add(parseNode(ois));
+                nodes.add(parseNode(dis));
             }
             return nodes;
         } catch (IOException e) {
@@ -73,29 +69,50 @@ class MessageService<D extends Data<D>> {
         }
     }
 
-    private Node parseNode(ObjectInputStream ois) throws IOException {
-        byte meta = ois.readByte();
-        byte[] ipAddress;
-        if ((meta & 1) == 0) {
-            ipAddress = new byte[4];
-        } else {
-            ipAddress = new byte[16];
+    private Node parseNode(DataInputStream dis) throws IOException {
+        int hostId = dis.readInt();
+        boolean isIPv6 = false;
+        if(hostId < 0){
+            hostId = -hostId;
+            isIPv6 = true;
         }
-        ois.readFully(ipAddress);
+        byte[] ipAddress;
+        if (isIPv6) {
+            ipAddress = new byte[16];
+        } else {
+            ipAddress = new byte[4];
+        }
+        dis.readFully(ipAddress);
         InetAddress address = InetAddress.getByAddress(ipAddress);
-        return new Node(address, ois.readUnsignedShort());
+        return new Node(hostId, address, dis.readUnsignedShort());
     }
 
     public void handleTRMessage(DatagramPacket packet, TRHandler trHandler) throws ParseException, IOException {
-        ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(packet.getData(), packet.getOffset(), packet.getLength()));
-        MessageType type = readType(ois);
+        ByteBuffer buffer = ByteBuffer.wrap(packet.getData(), packet.getOffset(), packet.getLength());
+        MessageType type = readType(buffer);
         switch (type) {
-            case TR1:
-                trHandler.handleTR1(packet.getAddress(), readInt(ois), readUnsignedShort(ois));
-                break;
-            case TR2:
-                trHandler.handleTR2(packet.getAddress(), readInt(ois));
-                break;
+            case TR1: {
+                int tokenId, tcpPort, hostId;
+                try {
+                    tokenId = buffer.getInt();
+                    hostId = buffer.getInt();
+                    tcpPort = Short.toUnsignedInt(buffer.getShort());
+                } catch (BufferUnderflowException e) {
+                    throw new ParseException(e);
+                }
+                trHandler.handleTR1(packet.getAddress(), tokenId, hostId, tcpPort);
+            }
+            break;
+            case TR2: {
+                int tokenId;
+                try {
+                    tokenId = buffer.getInt();
+                } catch (BufferUnderflowException e) {
+                    throw new ParseException(e);
+                }
+                trHandler.handleTR2(packet.getAddress(), tokenId);
+            }
+            break;
         }
     }
 
@@ -111,95 +128,105 @@ class MessageService<D extends Data<D>> {
         log.info("Sending TR1 message tokenId={} repeatsRemained={}", tokenId, repeatsRemained);
         int delay = context.getSettings().getTr1Delay();
         try {
-            ByteArrayOutputStream bas = new ByteArrayOutputStream(7);
-            ObjectOutputStream dos = new ObjectOutputStream(bas);
-            log.debug("Sending versionType {}", getTypeProtocolByte(MessageType.TR1));
-            dos.write(getTypeProtocolByte(MessageType.TR1));
-            dos.writeInt(tokenId);
-            dos.writeShort(context.getSelfTcpPort());
-            dos.flush();
-            sendUDPMessage(null, bas.toByteArray());
+            ByteBuffer buffer = ByteBuffer.allocate(32);
+            buffer.put(getTypeProtocolByte(MessageType.TR1));
+            buffer.putInt(tokenId);
+            buffer.putInt(context.getHostId());
+            buffer.putShort((short) context.getSelfTcpPort());
+            sendUDPMessage(null, buffer);
         } catch (IOException e) {
             log.warn("Error sending TR1 message: tokenId={} repeatsRemained={}", tokenId, repeatsRemained);
         }
-        if(repeatsRemained > 0) {
+        if (repeatsRemained > 0) {
             scheduledExecutor.schedule(() -> sendTR1Message(tokenId, repeatsRemained - 1), delay, TimeUnit.MILLISECONDS);
         }
     }
 
     public void sendTR2Message(InetAddress destination, int tokenId) throws IOException {
         log.info("Sending TR2 message tokenId={} dest={}", tokenId, destination);
-        ByteArrayOutputStream bas = new ByteArrayOutputStream(5);
-        ObjectOutputStream dos = new ObjectOutputStream(bas);
-        log.debug("Sending versionType {}", getTypeProtocolByte(MessageType.TR2));
-        dos.write(getTypeProtocolByte(MessageType.TR2));
-        dos.writeInt(tokenId);
-        dos.flush();
-        sendUDPMessage(destination, bas.toByteArray());
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.put(getTypeProtocolByte(MessageType.TR2));
+        buffer.putInt(tokenId);
+        sendUDPMessage(destination, buffer);
     }
 
-    private void sendUDPMessage(InetAddress destination, byte[] bytes) throws IOException {
+    private void sendUDPMessage(InetAddress destination, ByteBuffer buffer) throws IOException {
+        sendUDPMessage(destination, buffer.array(), buffer.arrayOffset(), buffer.position());
+    }
+
+    private void sendUDPMessage(InetAddress destination, byte[] bytes, int offset, int length) throws IOException {
         if (destination == null) {
             for (InterfaceAddress address : context.getSettings().getNetworkInterface().getInterfaceAddresses()) {
                 if (address.getBroadcast() != null) {
-                    udpSendSocket.send(createUdpDatagram(address.getBroadcast(), bytes));
+                    udpSendSocket.send(createUdpDatagram(address.getBroadcast(), bytes, offset, length));
                 }
             }
         } else {
-            udpSendSocket.send(createUdpDatagram(destination, bytes));
+            udpSendSocket.send(createUdpDatagram(destination, bytes, offset, length));
         }
     }
 
-    private DatagramPacket createUdpDatagram(InetAddress address, byte[] bytes) {
-        return new DatagramPacket(bytes, 0, bytes.length, address, context.getSettings().getUdpPort());
+    private DatagramPacket createUdpDatagram(InetAddress address, byte[] bytes, int offset, int length) {
+        return new DatagramPacket(bytes, offset, length, address, context.getSettings().getUdpPort());
     }
 
-    private MessageType readType(ObjectInputStream ois) throws ParseException {
+    private MessageType readType(DataInputStream dis) throws ParseException {
         try {
-            int versionType = ois.readUnsignedByte();
-            log.debug("Received versionType {}", versionType);
-            int version = versionType & 0xF;
-            if (PROTOCOL_VERSION != version) {
-                throw new ParseException("Version mismatch: " + version + " not supported (current version: " + MessageService.PROTOCOL_VERSION + ")");
-            }
-            int typeCode = (versionType & 0xF0) >> 4;
-            MessageType type = MessageType.forCode(typeCode);
-            if (type == null) {
-                throw new ParseException("Unknown type code: " + typeCode);
-            }
-            log.debug("Handling {} message", type);
-            return type;
+            return readType(dis.readByte());
         } catch (IOException e) {
             throw new ParseException(e);
         }
     }
 
-
-    public void sendTP1Message(ObjectOutputStream oos, int tokenId, int nodeListHash) throws IOException {
-        oos.write(getTypeProtocolByte(MessageType.TP1));
-        oos.writeInt(tokenId);
-        oos.writeInt(nodeListHash);
-        oos.flush();
+    private MessageType readType(ByteBuffer buffer) throws ParseException {
+        try {
+            return readType(buffer.get());
+        } catch (BufferUnderflowException e) {
+            throw new ParseException(e);
+        }
     }
 
-    public void sendTP2Message(ObjectOutputStream oos) throws IOException {
-        oos.write(getTypeProtocolByte(MessageType.TP2));
-        oos.flush();
+    private MessageType readType(byte versionType) throws ParseException {
+        log.debug("Received versionType {}", versionType);
+        int version = versionType & 0xF;
+        if (PROTOCOL_VERSION != version) {
+            throw new ParseException("Version mismatch: " + version + " not supported (current version: " + MessageService.PROTOCOL_VERSION + ")");
+        }
+        int typeCode = (versionType & 0xF0) >> 4;
+        MessageType type = MessageType.forCode(typeCode);
+        if (type == null) {
+            throw new ParseException("Unknown type code: " + typeCode);
+        }
+        log.debug("Handling {} message", type);
+        return type;
     }
 
-    public void sendTP3Message(ObjectOutputStream oos) throws IOException {
-        oos.write(getTypeProtocolByte(MessageType.TP3));
-        oos.flush();
+
+    public void sendTP1Message(DataOutputStream dos, int tokenId, int nodeListHash) throws IOException {
+        dos.write(getTypeProtocolByte(MessageType.TP1));
+        dos.writeInt(tokenId);
+        dos.writeInt(nodeListHash);
+        dos.flush();
     }
 
-    public void sendTP4Message(ObjectOutputStream oos, int nodeListSize, byte[] nodeList) throws IOException {
-        oos.write(getTypeProtocolByte(MessageType.TP4));
-        oos.writeInt(nodeListSize);
-        oos.write(nodeList);
-        oos.flush();
+    public void sendTP2Message(DataOutputStream dos) throws IOException {
+        dos.write(getTypeProtocolByte(MessageType.TP2));
+        dos.flush();
     }
 
-    public void sendTP5MessageHeader(ObjectOutputStream oos) throws IOException {
-        oos.write(getTypeProtocolByte(MessageType.TP5));
+    public void sendTP3Message(DataOutputStream dos) throws IOException {
+        dos.write(getTypeProtocolByte(MessageType.TP3));
+        dos.flush();
+    }
+
+    public void sendTP4Message(DataOutputStream dos, int nodeListSize, byte[] nodeList) throws IOException {
+        dos.write(getTypeProtocolByte(MessageType.TP4));
+        dos.writeInt(nodeListSize);
+        dos.write(nodeList);
+        dos.flush();
+    }
+
+    public void sendTP5MessageHeader(DataOutputStream dos) throws IOException {
+        dos.write(getTypeProtocolByte(MessageType.TP5));
     }
 }

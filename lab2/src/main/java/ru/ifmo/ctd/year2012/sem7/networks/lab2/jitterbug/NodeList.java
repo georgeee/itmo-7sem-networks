@@ -8,15 +8,12 @@ import java.util.*;
 class NodeList implements Iterable<Node> {
     private static final int BASE = 577;
     private final List<Node> nodeList;
+    private Map<Integer, Integer> nodeMap;
     private int hash;
     private final ByteArrayOutputStream baos;
 
     public int size() {
         return nodeList.size();
-    }
-
-    public boolean isEmpty() {
-        return nodeList.isEmpty();
     }
 
     public Node get(int index) {
@@ -25,23 +22,29 @@ class NodeList implements Iterable<Node> {
 
     public NodeList() {
         nodeList = new ArrayList<>();
+        nodeMap = new HashMap<>();
         baos = new ByteArrayOutputStream();
     }
 
-    public void add(Node node) {
+    public boolean add(Node node) {
+        if (nodeMap.containsKey(node.getHostId())) {
+            return false;
+        }
         InetAddress address = node.getAddress();
         byte[] addressBytes = address.getAddress();
-        byte meta = 0;
-        if (addressBytes.length == 16) {
-            meta |= 1;
-        }
-        ByteBuffer buffer = ByteBuffer.allocate(addressBytes.length + 3);
-        buffer.put(meta);
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.putInt((addressBytes.length == 16 ? -1 : 1) * node.getHostId());
         buffer.put(addressBytes);
         buffer.putShort((short) node.getPort());
-        hash = updateHash(hash, buffer.array(), buffer.arrayOffset(), addressBytes.length + 3);
-        baos.write(buffer.array(), buffer.arrayOffset(), addressBytes.length + 3);
+        hash = updateHash(hash, buffer.array(), buffer.arrayOffset(), buffer.position() - buffer.arrayOffset());
+        baos.write(buffer.array(), buffer.arrayOffset(), buffer.position() - buffer.arrayOffset());
         nodeList.add(node);
+        nodeMap.put(node.getHostId(), nodeList.size() - 1);
+        return true;
+    }
+
+    public Integer getByHostId(int hostId) {
+        return nodeMap.get(hostId);
     }
 
     @Override

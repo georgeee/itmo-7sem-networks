@@ -30,4 +30,6 @@ public interface Settings<D extends Data<D>> {
     default int getTrPhaseTimeout(){
         return getTr1Delay() * getTr1Repeat();
     }
+
+    long getDataComputationDelay();
 }

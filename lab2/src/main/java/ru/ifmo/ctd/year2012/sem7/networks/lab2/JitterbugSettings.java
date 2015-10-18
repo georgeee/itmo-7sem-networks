@@ -36,6 +36,10 @@ public class JitterbugSettings implements Settings<PiComputation> {
     private boolean preferIPv6;
 
     @Getter
+    @Value("${jitterbug.dataComputationDelay:0}")
+    private long dataComputationDelay;
+
+    @Getter
     @Value("${jitterbug.trInitTimeout:3000}")
     private int trInitTimeout;
     @Getter

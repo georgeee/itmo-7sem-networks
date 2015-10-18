@@ -4,16 +4,18 @@ import lombok.Getter;
 import lombok.ToString;
 
 import java.net.InetAddress;
-import java.util.Objects;
 
 @ToString
 class Node {
+    @Getter
+    private final int hostId;
     @Getter
     private final InetAddress address;
     @Getter
     private final int port;
 
-    public Node(InetAddress address, int port) {
+    public Node(int hostId, InetAddress address, int port) {
+        this.hostId = hostId;
         this.address = address;
         this.port = port;
     }
@@ -23,12 +25,11 @@ class Node {
         if (this == o) return true;
         if (!(o instanceof Node)) return false;
         Node node = (Node) o;
-        return Objects.equals(port, node.port) &&
-                Objects.equals(address, node.address);
+        return hostId == node.hostId;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(address, port);
+        return hostId;
     }
 }

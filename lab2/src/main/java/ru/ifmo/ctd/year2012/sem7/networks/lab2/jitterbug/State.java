@@ -8,7 +8,7 @@ interface State<D extends Data<D>> {
 
     int getTokenId();
 
-    void rememberNode(InetAddress address, int tcpPort);
+    void rememberNode(int hostId, InetAddress address, int tcpPort);
 
     void reportTR2(InetAddress senderAddress, int tokenId);
 

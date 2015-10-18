@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Jitterbug;
 
@@ -23,6 +24,9 @@ public class Application implements CommandLineRunner {
     @Autowired
     private JitterbugSettings jitterbugSettings;
 
+    @Autowired
+    private ApplicationContext context;
+
     public static void main(String[] args) throws Exception {
         SpringApplication application = new SpringApplication(Application.class);
         application.setApplicationContextClass(AnnotationConfigApplicationContext.class);
@@ -31,6 +35,7 @@ public class Application implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws IOException {
+        JitterbugSettings jitterbugSettings = context.getBean(JitterbugSettings.class);
         if (jitterbugSettings.getNetworkInterface() == null) {
             printHelp();
             System.out.println("Available interfaces:");
