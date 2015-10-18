@@ -266,6 +266,8 @@ In above:
   * data - data to send, application-provided array of bytes
     * size of data isn't defined anyhow, it's up to application to handle it if needed
 
+All integers are written in Big-Endian.
+
 ### Code for hash function
 
         byte[] bytes = (..);
