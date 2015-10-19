@@ -82,4 +82,10 @@ class NodeList implements Iterable<Node> {
         return oldNodes;
     }
 
+    @Override
+    public String toString() {
+        return "NodeList{" +
+                nodeList +
+                '}';
+    }
 }

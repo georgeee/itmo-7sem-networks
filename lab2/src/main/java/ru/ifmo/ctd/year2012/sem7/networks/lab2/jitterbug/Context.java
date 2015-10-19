@@ -5,6 +5,7 @@ import lombok.Getter;
 import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.ServerSocket;
+import java.net.SocketException;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -25,7 +26,6 @@ class Context<D extends Data<D>> {
     @Getter
     private final int hostId;
     @Getter
-    private final Node selfNode;
     private final Random random;
 
     public Context(Settings<D> settings) throws IOException {
@@ -39,14 +39,11 @@ class Context<D extends Data<D>> {
         trListener = new TRListener<>(this, datagramSocket);
         tpListener = new TPListener<>(this, serverSocket);
         hostId = generateHostId();
-        selfNode = new Node(hostId, settings.getSelfAddress(), selfTcpPort);
         processor = new Processor<>(this);
     }
 
-    private int generateHostId() {
-        //host_id - 4-byte integer with highest (sign) bit not used (viewing host_id as a signed integer, it should be >= 0)
-        int hostId = random.nextInt();
-        return hostId < 0 ? -hostId : hostId;
+    private int generateHostId() throws SocketException {
+        return Arrays.hashCode(settings.getNetworkInterface().getHardwareAddress());
     }
 
     State<D> getState() {

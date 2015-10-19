@@ -53,19 +53,17 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         data = context.getSettings().getInitialData();
         messageService = context.getMessageService();
         tokenId = generateTokenId();
-        rememberNode(context.getSelfNode());
-    }
-
-    private void rememberNode(Node node) {
-        boolean isNotKnown = allKnownHosts.add(node.getHostId());
-        if (isNotKnown) {
-            addQueue.add(node);
-        }
+        rememberNode(context.getHostId(), context.getSettings().getSelfAddress(), context.getSelfTcpPort());
     }
 
     @Override
     public void rememberNode(int hostId, InetAddress address, int tcpPort) {
-        rememberNode(new Node(hostId, address, tcpPort));
+        boolean isNotKnown = allKnownHosts.add(hostId);
+        if (isNotKnown) {
+            Node node = new Node(hostId, address, tcpPort);
+            log.info("Added node {} to add queue", node);
+            addQueue.add(node);
+        }
     }
 
     @Override
@@ -75,7 +73,12 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
 
     @Override
     public void handleSocketConnection(Socket socket) {
-        eventQueue.add(new TPReceivedEvent(socket));
+        try {
+            eventQueue.put(new TPReceivedEvent(socket));
+        } catch (InterruptedException e) {
+            log.debug("Ignoring tcp connection: interrupted");
+            Thread.currentThread().interrupt();
+        }
     }
 
     private int generateTokenId() {
@@ -125,7 +128,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     tr2ReceivedGreater = false;
                     log.info("[TR init] Initiated token restore, tokenId={}", tokenId);
                     messageService.sendTR1MessageRepeatedly(tokenId);
-                    scheduledExecutor.schedule(() -> eventQueue.add(new TRPhase1Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
+                    scheduledExecutor.schedule(() -> eventQueue.offer(new TRPhase1Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
                 }
             } else if (event instanceof TRPhase1Event) {
                 if (trInProgress) {
@@ -135,8 +138,9 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                         log.info("[TR phase1] Generated new token id: oldTokenId={} newTokenId={}", oldTokenId, tokenId);
                         tr2ReceivedGreater = false;
                         messageService.sendTR1MessageRepeatedly(tokenId);
-                        scheduledExecutor.schedule(() -> eventQueue.add(new TRPhase2Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
+                        scheduledExecutor.schedule(() -> eventQueue.offer(new TRPhase2Event()), context.getSettings().getTrPhaseTimeout(), TimeUnit.MILLISECONDS);
                     } else {
+                        trInProgress = false;
                         log.info("[TR phase1] Received greater tokenId, aborting TR procedure");
                     }
                 }
@@ -149,6 +153,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     } else {
                         log.info("[TR phase2] Received greater tokenId, aborting TR procedure");
                     }
+                    trInProgress = false;
                 }
             }
         }
@@ -162,6 +167,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             }
             lastLivenessEventTime = System.currentTimeMillis();
             log.info("Token not passed, repeating as leader...");
+            log.info("Node list: {}", nodeList);
         }
         log.info("Token passed, switching to waiter state");
         tokenId = -tokenId;
@@ -182,7 +188,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         log.info("Computed next data: {}", data);
         addQueue.stream().forEach(nodeList::add);
         int selfIndex = nodeList.getByHostId(context.getHostId());
-        log.info("Trying to pass token");
+        log.info("Trying to pass token, selfIndex={}", selfIndex);
         boolean tokenPassed = false;
         for (int i = selfIndex + 1; i < nodeList.size() && !tokenPassed; ++i) {
             tokenPassed = tokenPassForCandidate(i);
@@ -242,7 +248,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                 return true;
             }
         } catch (IOException | ParseException e) {
-            log.info("Caught exception trying to pass token to candidate {}", e);
+            log.debug("Caught exception trying to pass token to candidate {}", candidate, e);
         }
         return false;
     }
@@ -256,7 +262,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         int trInitDelay = context.getSettings().getTrInitTimeout();
         scheduledExecutor.scheduleWithFixedDelay(() -> {
             if (needTokenRestore()) {
-                eventQueue.add(new TRInitiateEvent());
+                eventQueue.offer(new TRInitiateEvent());
             }
         }, trInitDelay, trInitDelay, TimeUnit.MILLISECONDS);
     }
@@ -303,14 +309,14 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             });
             log.info("[TokenPass] Procedure started: newTokenId={} oldTokenId={}", newTokenId, tokenId);
             if (newTokenId == tokenId) {
-                newData = data;
+                data = newData;
             } else {
                 tokenId = newTokenId;
-                newData = data.mergeWith(newData);
+                data = newData.mergeWith(data);
             }
             if (newNodes != null) {
                 Set<Node> oldNodes = nodeList.replace(newNodes);
-                oldNodes.forEach(Processor.this::rememberNode);
+                oldNodes.forEach(addQueue::add);
                 newNodes.forEach(n -> allKnownHosts.add(n.getHostId()));
             }
             if (tokenId < 0) {
