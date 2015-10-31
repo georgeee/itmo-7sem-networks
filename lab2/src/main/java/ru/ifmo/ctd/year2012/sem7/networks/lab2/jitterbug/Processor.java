@@ -120,7 +120,9 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     log.info("Exception caught while communicating through socket: address={}", remoteAddress, e);
                 }
                 if (processedTokenPass) {
-                    actAsLeader();
+                    if(!actAsLeader()){
+                        return;
+                    }
                 }
             } else if (event instanceof TRInitiateEvent) {
                 if (!trInProgress && needTokenRestore()) {
@@ -149,7 +151,9 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     if (!tr2ReceivedGreater) {
                         tokenId = -tokenId;
                         log.info("[TR phase2] Became a leader, tokenId={}", tokenId);
-                        actAsLeader();
+                        if(!actAsLeader()){
+                            return;
+                        }
                     } else {
                         log.info("[TR phase2] Received greater tokenId, aborting TR procedure");
                     }
@@ -161,13 +165,18 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
 
     private boolean actAsLeader() {
         while (!actAsLeaderPhase()) {
-            if (Thread.interrupted()) {
-                Thread.currentThread().interrupt();
-                return false;
+            try {
+                if (Thread.interrupted()) {
+                    Thread.currentThread().interrupt();
+                    log.info("Leader interrupted, exiting");
+                    return false;
+                }
+                lastLivenessEventTime = System.currentTimeMillis();
+                log.info("Token not passed, repeating as leader...");
+                log.info("Node list: {}", nodeList);
+            }catch (Exception e){
+                log.error("Received error in leader phase", e);
             }
-            lastLivenessEventTime = System.currentTimeMillis();
-            log.info("Token not passed, repeating as leader...");
-            log.info("Node list: {}", nodeList);
         }
         log.info("Token passed, switching to waiter state");
         tokenId = -tokenId;
@@ -228,8 +237,8 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         try {
             try (Socket socket = new Socket(candidate.getAddress(), candidate.getPort())) {
                 socket.setSoTimeout(context.getSettings().getTpTimeout());
-                DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-                DataInputStream dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+                ObjectOutputStream dos = new ObjectOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+                ObjectInputStream dis = new ObjectInputStream(new BufferedInputStream(socket.getInputStream()));
                 messageService.sendTP1Message(dos, tokenId, nodeList.getHash());
                 messageService.handleTPMessage(dis, new TPHandler() {
                     @Override
@@ -272,14 +281,14 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         int newTokenId;
         List<Node> newNodes;
         D newData;
-        final DataOutputStream dos;
-        final DataInputStream dis;
+        final ObjectOutputStream dos;
+        final ObjectInputStream dis;
 
         private TokenReceive(Socket socket) throws IOException, ParseException {
             this.socket = socket;
             socket.setSoTimeout(context.getSettings().getTpTimeout());
-            dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-            dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+            dos = new ObjectOutputStream(socket.getOutputStream());
+            dis = new ObjectInputStream(socket.getInputStream());
         }
 
         void process() throws IOException, ParseException {
@@ -303,7 +312,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             });
             messageService.handleTPMessage(dis, new TPHandler() {
                 @Override
-                public void handleTP5(DataInputStream dis) throws IOException, ParseException {
+                public void handleTP5(ObjectInputStream dis) throws IOException, ParseException {
                     newData = data.readFromStream(dis);
                 }
             });

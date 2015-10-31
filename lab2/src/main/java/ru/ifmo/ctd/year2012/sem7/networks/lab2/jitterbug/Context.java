@@ -43,7 +43,7 @@ class Context<D extends Data<D>> {
     }
 
     private int generateHostId() throws SocketException {
-        return Arrays.hashCode(settings.getNetworkInterface().getHardwareAddress());
+        return Math.abs(Arrays.hashCode(settings.getNetworkInterface().getHardwareAddress()) ^ selfTcpPort);
     }
 
     State<D> getState() {
@@ -70,9 +70,5 @@ class Context<D extends Data<D>> {
                 trListener.interrupt();
             }
         }
-    }
-
-    public Random getRandom() {
-        return random;
     }
 }

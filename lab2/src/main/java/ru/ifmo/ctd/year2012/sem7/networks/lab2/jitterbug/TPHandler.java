@@ -1,7 +1,7 @@
 package ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug;
 
 import java.io.IOException;
-import java.io.DataInputStream;
+import java.io.ObjectInputStream;
 import java.util.List;
 
 abstract class TPHandler {
@@ -22,7 +22,7 @@ abstract class TPHandler {
         throw new ParseException("TP4 message not expected");
     }
 
-    public void handleTP5(DataInputStream dataStream) throws IOException, ParseException {
+    public void handleTP5(ObjectInputStream dataStream) throws IOException, ParseException {
         throw new ParseException("TP5 message not expected");
     }
 }

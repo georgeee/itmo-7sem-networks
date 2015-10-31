@@ -25,11 +25,10 @@ public class PiComputation implements Data<PiComputation> {
     }
 
     @Override
-    public void writeToStream(DataOutputStream dos) throws IOException {
-        ObjectOutputStream oos = new ObjectOutputStream(dos);
-        oos.writeInt(digitsComputed);
-        oos.writeObject(pi);
-        oos.flush();
+    public void writeToStream(ObjectOutputStream dos) throws IOException {
+        dos.writeInt(digitsComputed);
+        dos.writeObject(pi);
+        dos.flush();
     }
 
     @Override
@@ -57,8 +56,7 @@ public class PiComputation implements Data<PiComputation> {
     }
 
     @Override
-    public PiComputation readFromStream(DataInputStream dis) throws IOException {
-        ObjectInputStream ois = new ObjectInputStream(dis);
+    public PiComputation readFromStream(ObjectInputStream ois) throws IOException {
         try {
             return new PiComputation(ois.readInt(), (BigFraction) ois.readObject());
         } catch (ClassNotFoundException e) {
