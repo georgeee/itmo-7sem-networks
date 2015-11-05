@@ -81,11 +81,14 @@ It's a passive state of node. In this state node waits for either of events to o
 ### Leader
 It's an active state of node. Being in this state node follows such flow:
 
-  1. Computes next message
-  2. Updates *state variables*:
-      1. token_id, data, penalties
-      2. updates node list with new nodes, not yet in the list
-  3. Launchs *token_pass* procedure
+  1. Throw a coin, with probability `1 / ( N * {token_loose_prob_base} )`
+      1. if *true*, switch to *orphan* state
+      2. if false
+          1. Computes next message
+          2. Updates *state variables*:
+              1. token_id, data, penalties
+              2. updates node list with new nodes, not yet in the list
+          3. Launchs *token_pass* procedure
 
 ## Procedures
 
