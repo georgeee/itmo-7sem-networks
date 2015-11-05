@@ -26,8 +26,6 @@ Core point to achieve this is application-supplied merge function. Protocol uses
 
 Note, that merge is applied only when split/merge occurs, normally we only generate new (next) message.
 
-@TODO: token races (i.e. two tokens in subnet, not meeting anywhere, infinitely circulating in subnet)
-
 ## Node states
 
 Protocol consists of several procedures, operating on fixed set of node states
