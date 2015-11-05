@@ -89,7 +89,7 @@ It's an active state of node. Being in this state node follows such flow:
           3. Launchs *token_pass* procedure
 
 Trick with coin is used to eliminate duplicating tokens. When leader &laquo; looses &raquo; token, it needs to launch **token_restore** procedure. And if there will be any other token in subnet, **token_restore** will result into nothing. And only one token will remain in subnet.
-NB. `{token_loose_prob_base}` in fact means as mean amount of loops, two tokens would coexist in subnet.
+NB. `{token_loose_prob_base}` in fact means mean amount of loops, two tokens would coexist in subnet.
 
 ## Procedures
 
