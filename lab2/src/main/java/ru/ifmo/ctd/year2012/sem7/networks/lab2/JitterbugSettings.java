@@ -40,7 +40,7 @@ public class JitterbugSettings implements Settings<PiComputation> {
     private long dataComputationDelay;
 
     @Getter
-    @Value("${jitterbug.trInitTimeout:3000}")
+    @Value("${jitterbug.trInitTimeout:10000}")
     private int trInitTimeout;
     @Getter
     @Value("${jitterbug.tpTimeout:1000}")
@@ -49,8 +49,12 @@ public class JitterbugSettings implements Settings<PiComputation> {
     @Value("${jitterbug.tr1Delay:200}")
     private int tr1Delay;
     @Getter
-    @Value("${jitterbug.tr1Repeat:5}")
+    @Value("${jitterbug.tr1Repeat:3}")
     private int tr1Repeat;
+
+    @Getter
+    @Value("${jitterbug.tokenLooseProbBase:3}")
+    private double tokenLooseProbBase;
 
     @Getter
     private InetAddress selfAddress;

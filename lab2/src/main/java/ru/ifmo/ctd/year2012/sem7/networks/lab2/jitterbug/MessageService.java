@@ -3,9 +3,10 @@ package ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.*;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -27,7 +28,7 @@ class MessageService<D extends Data<D>> {
         udpSendSocket = new DatagramSocket();
     }
 
-    public void handleTPMessage(ObjectInputStream dis, TPHandler handler) throws IOException, ParseException {
+    public void handleTPMessage(DataInputStream dis, TPHandler handler) throws IOException, ParseException {
         MessageType type = readType(dis);
         switch (type) {
             case TP1: {
@@ -61,7 +62,7 @@ class MessageService<D extends Data<D>> {
         }
     }
 
-    private List<Node> parseNodeList(ObjectInputStream dis) throws ParseException {
+    private List<Node> parseNodeList(DataInputStream dis) throws ParseException {
         try {
             int size = dis.readInt();
             List<Node> nodes = new ArrayList<>();
@@ -74,7 +75,7 @@ class MessageService<D extends Data<D>> {
         }
     }
 
-    private Node parseNode(ObjectInputStream dis) throws IOException {
+    private Node parseNode(DataInputStream dis) throws IOException {
         int hostId = dis.readInt();
         boolean isIPv6 = false;
         if(hostId < 0){
@@ -178,7 +179,7 @@ class MessageService<D extends Data<D>> {
         return new DatagramPacket(bytes, offset, length, address, context.getSettings().getUdpPort());
     }
 
-    private MessageType readType(ObjectInputStream dis) throws ParseException {
+    private MessageType readType(DataInputStream dis) throws ParseException {
         try {
             return readType(dis.readByte());
         } catch (IOException e) {
@@ -210,7 +211,7 @@ class MessageService<D extends Data<D>> {
     }
 
 
-    public void sendTP1Message(ObjectOutputStream dos, int tokenId, int nodeListHash) throws IOException {
+    public void sendTP1Message(DataOutputStream dos, int tokenId, int nodeListHash) throws IOException {
         log.debug("Sending TP1 message tokenId={} nodeListHash={}", tokenId, nodeListHash);
         dos.write(getTypeProtocolByte(MessageType.TP1));
         dos.writeInt(tokenId);
@@ -218,19 +219,19 @@ class MessageService<D extends Data<D>> {
         dos.flush();
     }
 
-    public void sendTP2Message(ObjectOutputStream dos) throws IOException {
+    public void sendTP2Message(DataOutputStream dos) throws IOException {
         log.debug("Sending TP2");
         dos.write(getTypeProtocolByte(MessageType.TP2));
         dos.flush();
     }
 
-    public void sendTP3Message(ObjectOutputStream dos) throws IOException {
+    public void sendTP3Message(DataOutputStream dos) throws IOException {
         log.debug("Sending TP3");
         dos.write(getTypeProtocolByte(MessageType.TP3));
         dos.flush();
     }
 
-    public void sendTP4Message(ObjectOutputStream dos, int nodeListSize, byte[] nodeList) throws IOException {
+    public void sendTP4Message(DataOutputStream dos, int nodeListSize, byte[] nodeList) throws IOException {
         log.debug("Sending TP4");
         dos.write(getTypeProtocolByte(MessageType.TP4));
         dos.writeInt(nodeListSize);
@@ -238,9 +239,12 @@ class MessageService<D extends Data<D>> {
         dos.flush();
     }
 
-    public void sendTP5MessageHeader(ObjectOutputStream dos) throws IOException {
+    public void sendTP5Message(DataOutputStream dos, D data) throws IOException {
         log.debug("Sending TP5");
         dos.write(getTypeProtocolByte(MessageType.TP5));
+        ObjectOutputStream oos = new ObjectOutputStream(dos);
+        oos.writeObject(data);
+        oos.flush();
         dos.flush();
     }
 }

@@ -19,12 +19,12 @@ import java.util.concurrent.*;
  * @param <D> type of data (application-defined)
  */
 class Processor<D extends Data<D>> extends Thread implements State<D> {
-    private static final Logger log = LoggerFactory.getLogger(MessageService.class);
+    private static final Logger log = LoggerFactory.getLogger(Processor.class);
+    private final Random random;
     private final Context<D> context;
     private final BlockingQueue<Event> eventQueue;
 
-    private final Set<Integer> allKnownHosts = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private final Queue<Node> addQueue = new ConcurrentLinkedQueue<>();
+    private final Set<Node> addQueue = Collections.newSetFromMap(new ConcurrentHashMap<>());
     private final NodeList nodeList = new NodeList();
     private final MessageService<D> messageService;
 
@@ -53,16 +53,15 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
         data = context.getSettings().getInitialData();
         messageService = context.getMessageService();
         tokenId = generateTokenId();
+        random = new Random(System.currentTimeMillis() ^ context.getHostId());
         rememberNode(context.getHostId(), context.getSettings().getSelfAddress(), context.getSelfTcpPort());
     }
 
     @Override
     public void rememberNode(int hostId, InetAddress address, int tcpPort) {
-        boolean isNotKnown = allKnownHosts.add(hostId);
-        if (isNotKnown) {
-            Node node = new Node(hostId, address, tcpPort);
+        Node node = new Node(hostId, address, tcpPort);
+        if (addQueue.add(node)) {
             log.info("Added node {} to add queue", node);
-            addQueue.add(node);
         }
     }
 
@@ -112,15 +111,19 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                 trInProgress = false;
                 InetAddress remoteAddress = null;
                 boolean processedTokenPass = false;
-                try (Socket socket = ((TPReceivedEvent) event).getSocket()) {
+                try (Socket socket = ((TPReceivedEvent) event).getSocket();
+                     DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+                     DataInputStream dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+                ) {
+                    socket.setSoTimeout(context.getSettings().getTpTimeout());
                     remoteAddress = socket.getInetAddress();
-                    new TokenReceive(socket).process();
+                    new TokenReceive(dis, dos).process();
                     processedTokenPass = true;
                 } catch (IOException | ParseException e) {
                     log.info("Exception caught while communicating through socket: address={}", remoteAddress, e);
                 }
                 if (processedTokenPass) {
-                    if(!actAsLeader()){
+                    if (!actAsLeader()) {
                         return;
                     }
                 }
@@ -151,7 +154,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                     if (!tr2ReceivedGreater) {
                         tokenId = -tokenId;
                         log.info("[TR phase2] Became a leader, tokenId={}", tokenId);
-                        if(!actAsLeader()){
+                        if (!actAsLeader()) {
                             return;
                         }
                     } else {
@@ -164,70 +167,84 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
     }
 
     private boolean actAsLeader() {
-        while (!actAsLeaderPhase()) {
+        boolean success = false;
+        while (!success) {
             try {
-                if (Thread.interrupted()) {
-                    Thread.currentThread().interrupt();
-                    log.info("Leader interrupted, exiting");
-                    return false;
+                success = actAsLeaderPhase();
+                if (!success) {
+                    if (Thread.interrupted()) {
+                        Thread.currentThread().interrupt();
+                        log.info("Leader interrupted, exiting");
+                        return false;
+                    }
+                    lastLivenessEventTime = System.currentTimeMillis();
+                    log.info("Token not passed, repeating as leader...");
                 }
-                lastLivenessEventTime = System.currentTimeMillis();
-                log.info("Token not passed, repeating as leader...");
-                log.info("Node list: {}", nodeList);
-            }catch (Exception e){
+            } catch (Exception e) {
                 log.error("Received error in leader phase", e);
             }
         }
         log.info("Token passed, switching to waiter state");
+        lastLivenessEventTime = System.currentTimeMillis();
         tokenId = -tokenId;
         return true;
     }
 
     private boolean actAsLeaderPhase() {
-        log.info("Processing as leader: tokenId = {}", tokenId);
-        long dataComputationDelay = context.getSettings().getDataComputationDelay();
-        if (dataComputationDelay > 0) {
-            try {
-                Thread.sleep(dataComputationDelay);
-            } catch (InterruptedException e) {
-                return false;
+        int coinThreshold = (int) (context.getSettings().getTokenLooseProbBase() * addQueue.size());
+        log.info("Throwing coin (whether to loose token) with probability {}", coinThreshold);
+        int coinResult = random.nextInt(coinThreshold);
+        if (coinResult == 0) {
+            addTRInitEvent();
+            log.info("Token was intentionally lost: switching to orphan state");
+            return true;
+        } else {
+            log.info("Processing as leader: tokenId = {}", tokenId);
+            long dataComputationDelay = context.getSettings().getDataComputationDelay();
+            if (dataComputationDelay > 0) {
+                try {
+                    Thread.sleep(dataComputationDelay);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             }
+            data = data.next();
+            log.info("Computed next data: {}", data);
+            addQueue.stream().forEach(nodeList::add);
+            int selfIndex = nodeList.getByHostId(context.getHostId());
+            log.info("Trying to pass token, selfIndex={}, nodeList={}", selfIndex, nodeList);
+            boolean tokenPassed = false;
+            for (int i = selfIndex + 1; i < nodeList.size() && !tokenPassed; ++i) {
+                tokenPassed = tokenPassForCandidate(i);
+            }
+            for (int i = 0; i < selfIndex && !tokenPassed; ++i) {
+                tokenPassed = tokenPassForCandidate(i);
+            }
+            return tokenPassed;
         }
-        data = data.next();
-        log.info("Computed next data: {}", data);
-        addQueue.stream().forEach(nodeList::add);
-        int selfIndex = nodeList.getByHostId(context.getHostId());
-        log.info("Trying to pass token, selfIndex={}", selfIndex);
-        boolean tokenPassed = false;
-        for (int i = selfIndex + 1; i < nodeList.size() && !tokenPassed; ++i) {
-            tokenPassed = tokenPassForCandidate(i);
-        }
-        for (int i = 0; i < selfIndex && !tokenPassed; ++i) {
-            tokenPassed = tokenPassForCandidate(i);
-        }
-        return tokenPassed;
     }
 
     private boolean tokenPassForCandidate(int i) {
         Node candidate = nodeList.get(i);
-        log.debug("Trying candidate #{}, {}", i, candidate);
+        log.info("Trying candidate #{}, {}", i, candidate);
         if (candidate.getHostId() == context.getHostId()) {
             return false;
         }
         Penalty penalty = penalties.computeIfAbsent(candidate.getHostId(), n -> new Penalty());
         if (penalty.count < (1 << penalty.threshold) - 1) {
-            log.debug("Candidate omitted due to penalties: {}/{} passed", penalty.count, (1 << penalty.threshold) - 1);
+            log.info("Candidate omitted due to penalties: {}/{} passed", penalty.count, (1 << penalty.threshold) - 1);
             penalty.count++;
         } else {
             //Allowed for round
             penalty.count = 0;
             if (tokenPassForCandidateImpl(candidate)) {
                 penalty.decThreshold();
-                log.debug("Token successfully passed");
+                log.info("Token successfully passed");
                 return true;
             } else {
                 penalty.incThreshold();
-                log.debug("Token not passed");
+                log.info("Token not passed");
             }
         }
         return false;
@@ -235,10 +252,11 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
 
     private boolean tokenPassForCandidateImpl(Node candidate) {
         try {
-            try (Socket socket = new Socket(candidate.getAddress(), candidate.getPort())) {
+            try (Socket socket = new Socket(candidate.getAddress(), candidate.getPort());
+                 DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+                 DataInputStream dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+            ) {
                 socket.setSoTimeout(context.getSettings().getTpTimeout());
-                ObjectOutputStream dos = new ObjectOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-                ObjectInputStream dis = new ObjectInputStream(new BufferedInputStream(socket.getInputStream()));
                 messageService.sendTP1Message(dos, tokenId, nodeList.getHash());
                 messageService.handleTPMessage(dis, new TPHandler() {
                     @Override
@@ -251,9 +269,7 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                         //Do nothing
                     }
                 });
-                messageService.sendTP5MessageHeader(dos);
-                data.writeToStream(dos);
-                dos.flush();
+                messageService.sendTP5Message(dos, data);
                 return true;
             }
         } catch (IOException | ParseException e) {
@@ -270,26 +286,26 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
     private void initTimeouts() {
         int trInitDelay = context.getSettings().getTrInitTimeout();
         scheduledExecutor.scheduleWithFixedDelay(() -> {
-            if (needTokenRestore()) {
-                eventQueue.offer(new TRInitiateEvent());
-            }
-        }, trInitDelay, trInitDelay, TimeUnit.MILLISECONDS);
+            if (needTokenRestore()) addTRInitEvent();
+        }, 0, trInitDelay, TimeUnit.MILLISECONDS);
+    }
+
+    private void addTRInitEvent() {
+        eventQueue.offer(new TRInitiateEvent());
     }
 
     private class TokenReceive {
-        final Socket socket;
         int newTokenId;
         List<Node> newNodes;
         D newData;
-        final ObjectOutputStream dos;
-        final ObjectInputStream dis;
+        final DataInputStream dis;
+        final DataOutputStream dos;
 
-        private TokenReceive(Socket socket) throws IOException, ParseException {
-            this.socket = socket;
-            socket.setSoTimeout(context.getSettings().getTpTimeout());
-            dos = new ObjectOutputStream(socket.getOutputStream());
-            dis = new ObjectInputStream(socket.getInputStream());
+        private TokenReceive(DataInputStream dis, DataOutputStream dos) {
+            this.dis = dis;
+            this.dos = dos;
         }
+
 
         void process() throws IOException, ParseException {
             messageService.handleTPMessage(dis, new TPHandler() {
@@ -312,8 +328,14 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             });
             messageService.handleTPMessage(dis, new TPHandler() {
                 @Override
-                public void handleTP5(ObjectInputStream dis) throws IOException, ParseException {
-                    newData = data.readFromStream(dis);
+                @SuppressWarnings("unchecked")
+                public void handleTP5(DataInputStream dis) throws IOException, ParseException {
+                    ObjectInputStream ois = new ObjectInputStream(dis);
+                    try {
+                        newData = (D) ois.readObject();
+                    } catch (ClassNotFoundException e) {
+                        throw new IOException(e);
+                    }
                 }
             });
             log.info("[TokenPass] Procedure started: newTokenId={} oldTokenId={}", newTokenId, tokenId);
@@ -326,7 +348,6 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
             if (newNodes != null) {
                 Set<Node> oldNodes = nodeList.replace(newNodes);
                 oldNodes.forEach(addQueue::add);
-                newNodes.forEach(n -> allKnownHosts.add(n.getHostId()));
             }
             if (tokenId < 0) {
                 tokenId = -tokenId;

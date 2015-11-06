@@ -32,4 +32,6 @@ public interface Settings<D extends Data<D>> {
     }
 
     long getDataComputationDelay();
+
+    double getTokenLooseProbBase();
 }

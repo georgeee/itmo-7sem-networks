@@ -4,7 +4,6 @@ import lombok.Getter;
 import org.apache.commons.math3.fraction.BigFraction;
 import ru.ifmo.ctd.year2012.sem7.networks.lab2.jitterbug.Data;
 
-import java.io.*;
 import java.math.BigDecimal;
 
 public class PiComputation implements Data<PiComputation> {
@@ -22,13 +21,6 @@ public class PiComputation implements Data<PiComputation> {
 
     public PiComputation() {
         this(0, BigFraction.ZERO);
-    }
-
-    @Override
-    public void writeToStream(ObjectOutputStream dos) throws IOException {
-        dos.writeInt(digitsComputed);
-        dos.writeObject(pi);
-        dos.flush();
     }
 
     @Override
@@ -53,15 +45,6 @@ public class PiComputation implements Data<PiComputation> {
         x = x.divide(two.pow(10 * n + 6));
         if (n % 2 != 0) x = x.negate();
         return x;
-    }
-
-    @Override
-    public PiComputation readFromStream(ObjectInputStream ois) throws IOException {
-        try {
-            return new PiComputation(ois.readInt(), (BigFraction) ois.readObject());
-        } catch (ClassNotFoundException e) {
-            throw new IOException("Failed to read object", e);
-        }
     }
 
     @Override

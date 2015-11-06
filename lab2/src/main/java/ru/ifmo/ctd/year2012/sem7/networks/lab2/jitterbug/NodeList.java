@@ -72,6 +72,7 @@ class NodeList implements Iterable<Node> {
         hash = 0;
         baos.reset();
         nodeList.clear();
+        nodeMap.clear();
     }
 
     public Set<Node> replace(List<Node> newNodes) {
