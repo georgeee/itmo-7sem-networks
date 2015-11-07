@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.*;
@@ -111,14 +112,15 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
                 trInProgress = false;
                 InetAddress remoteAddress = null;
                 boolean processedTokenPass = false;
-                try (Socket socket = ((TPReceivedEvent) event).getSocket();
-                     DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-                     DataInputStream dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
-                ) {
+                try (Socket socket = ((TPReceivedEvent) event).getSocket()) {
                     socket.setSoTimeout(context.getSettings().getTpTimeout());
-                    remoteAddress = socket.getInetAddress();
-                    new TokenReceive(dis, dos).process();
-                    processedTokenPass = true;
+                    try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+                         DataInputStream dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+                    ) {
+                        remoteAddress = socket.getInetAddress();
+                        new TokenReceive(dis, dos).process();
+                        processedTokenPass = true;
+                    }
                 } catch (IOException | ParseException e) {
                     log.info("Exception caught while communicating through socket: address={}", remoteAddress, e);
                 }
@@ -251,12 +253,12 @@ class Processor<D extends Data<D>> extends Thread implements State<D> {
     }
 
     private boolean tokenPassForCandidateImpl(Node candidate) {
-        try {
-            try (Socket socket = new Socket(candidate.getAddress(), candidate.getPort());
-                 DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+        try (Socket socket = new Socket()) {
+            socket.setSoTimeout(context.getSettings().getTpTimeout());
+            socket.connect(new InetSocketAddress(candidate.getAddress(), candidate.getPort()), context.getSettings().getTpTimeout());
+            try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
                  DataInputStream dis = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             ) {
-                socket.setSoTimeout(context.getSettings().getTpTimeout());
                 messageService.sendTP1Message(dos, tokenId, nodeList.getHash());
                 messageService.handleTPMessage(dis, new TPHandler() {
                     @Override

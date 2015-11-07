@@ -43,7 +43,7 @@ public class JitterbugSettings implements Settings<PiComputation> {
     @Value("${jitterbug.trInitTimeout:10000}")
     private int trInitTimeout;
     @Getter
-    @Value("${jitterbug.tpTimeout:1000}")
+    @Value("${jitterbug.tpTimeout:7000}")
     private int tpTimeout;
     @Getter
     @Value("${jitterbug.tr1Delay:200}")
