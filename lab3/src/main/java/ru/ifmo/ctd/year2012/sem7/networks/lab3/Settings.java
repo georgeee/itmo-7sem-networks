@@ -25,7 +25,7 @@ public class Settings {
     @Value("${iface:}")
     private String interfaceName;
     @Getter
-    @Value("${preferIPv6:}")
+    @Value("${preferIPv6:false}")
     private boolean preferIPv6;
 
 
