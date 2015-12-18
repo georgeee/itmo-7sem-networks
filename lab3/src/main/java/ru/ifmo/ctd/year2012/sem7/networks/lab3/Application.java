@@ -8,8 +8,11 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.util.StreamUtils;
+import ru.ifmo.ctd.year2012.sem7.networks.lab3.transmission.Receiver;
+import ru.ifmo.ctd.year2012.sem7.networks.lab3.transmission.Sender;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.Enumeration;
@@ -21,6 +24,12 @@ public class Application implements CommandLineRunner {
 
     @Autowired
     private Settings settings;
+
+    @Autowired
+    private Receiver receiver;
+
+    @Autowired
+    private Sender sender;
 
     public static void main(String[] args) throws Exception {
         SpringApplication application = new SpringApplication(Application.class);
@@ -42,7 +51,43 @@ public class Application implements CommandLineRunner {
                 log.warn("Exception caught while printing interfaces", e);
             }
         }
+        if (settings.isStartReceiver()) {
+            receiver.start();
+        }
+        if (settings.isStartSender()) {
+            sender.start();
+        }
+        exampleReceiver();
+        exampleSender();
     }
 
+    private void exampleSender() {
+        new Thread(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+                 BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()))) {
+                br.lines().forEach(line -> {
+                    try {
+                        bw.write(line);
+                        bw.newLine();
+                        bw.flush();
+                    } catch (IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+            } catch (Exception e) {
+                log.error("Error in sender example", e);
+            }
+        }).start();
+    }
+
+    private void exampleReceiver() {
+        new Thread(() -> {
+            try {
+                StreamUtils.copy(receiver.getInputStream(), System.out);
+            } catch (IOException e) {
+                log.error("Error in receiver example", e);
+            }
+        }).start();
+    }
 
 }

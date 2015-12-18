@@ -24,11 +24,25 @@ public class Settings {
     @Getter
     @Value("${iface:}")
     private String interfaceName;
+
     @Getter
-    @Value("${preferIPv6:}")
+    @Value("${send:false}")
+    private boolean startSender;
+
+    @Getter
+    @Value("${receive:false}")
+    private boolean startReceiver;
+
+    @Getter
+    @Value("${preferIPv6:false}")
     private boolean preferIPv6;
 
+    @Value("${group}")
+    private String groupAddressName;
 
+    @Getter
+    @Value("${packetSize:1024}")
+    private int packetSize;
 
     @Getter
     private InetAddress selfAddress;
@@ -36,8 +50,11 @@ public class Settings {
     @Getter
     private Set<InetAddress> selfAddresses;
 
+    @Getter
+    private InetAddress groupAddress;
+
     @PostConstruct
-    public void init() {
+    public void init() throws UnknownHostException {
         try {
             Enumeration<NetworkInterface> ifaceEnumeration = NetworkInterface.getNetworkInterfaces();
             while (ifaceEnumeration.hasMoreElements()) {
@@ -59,6 +76,7 @@ public class Settings {
             selfAddress = computeSelfAddress();
             selfAddresses = computeSelfAddresses();
         }
+        groupAddress = InetAddress.getByName(groupAddressName);
     }
 
     private Set<InetAddress> computeSelfAddresses() {
@@ -89,4 +107,5 @@ public class Settings {
         }
         return result;
     }
+
 }
