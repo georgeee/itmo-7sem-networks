@@ -86,25 +86,5 @@ public class Application implements CommandLineRunner {
             }).start();
         }
     }
-
-    private class ConsoleListener extends Thread {
-        public volatile boolean running = false;
-
-        @Override
-        public void run() {
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in))) {
-                String st;
-                while (!"stop".equals(st = reader.readLine())) {
-                    if ("start".equals(st)) {
-                        running = true;
-                    }
-                }
-                running = false;
-                this.interrupt();
-            } catch (IOException e) {
-                log.debug("Error in opening reader", e);
-            }
-        }
-    }
-
+    
 }
