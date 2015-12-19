@@ -62,32 +62,11 @@ public class Application implements CommandLineRunner {
     }
 
     private void exampleSender() {
-        new Thread(() -> {
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-                 BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(sender.getOutputStream()))) {
-                br.lines().forEach(line -> {
-                    try {
-                        bw.write(line);
-                        bw.newLine();
-                        bw.flush();
-                    } catch (IOException e) {
-                        throw new IllegalStateException(e);
-                    }
-                });
-            } catch (Exception e) {
-                log.error("Error in sender example", e);
-            }
-        }).start();
+        new AudioRecorder(sender.getOutputStream()).start();
     }
 
     private void exampleReceiver() {
-        new Thread(() -> {
-            try {
-                StreamUtils.copy(receiver.getInputStream(), System.out);
-            } catch (IOException e) {
-                log.error("Error in receiver example", e);
-            }
-        }).start();
+        new AudioPlayer(receiver.getInputStream()).start();
     }
 
 }
