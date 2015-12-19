@@ -27,6 +27,12 @@ public class Receiver extends Thread {
 
     private PipedOutputStream outputStream;
 
+    @Getter
+    private Long lastReceived = System.currentTimeMillis();
+
+    @Getter
+    private InetAddress lastSender;
+
     @PostConstruct
     private void init() {
         try {
@@ -50,6 +56,8 @@ public class Receiver extends Thread {
                 }
                 DatagramPacket packet = new DatagramPacket(buf, buf.length);
                 socket.receive(packet);
+                lastReceived = System.currentTimeMillis();
+                lastSender = socket.getInterface();
                 log.debug("[Receiver] received a packet of size {} from {}:{}", packet.getLength(), packet.getAddress(), packet.getPort());
                 outputStream.write(packet.getData(), packet.getOffset(), packet.getLength());
             }
