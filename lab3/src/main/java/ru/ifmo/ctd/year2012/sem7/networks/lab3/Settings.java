@@ -17,6 +17,11 @@ import java.util.Set;
 @Component
 public class Settings {
     private static final Logger log = LoggerFactory.getLogger(Settings.class);
+
+    @Getter
+    @Value("${lastSendTimeout:1000}")
+    private int lastSendTimeout;
+
     @Getter
     @Value("${udpPort:30041}")
     private int udpPort;
