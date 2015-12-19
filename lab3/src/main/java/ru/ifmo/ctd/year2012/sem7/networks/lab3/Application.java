@@ -30,6 +30,12 @@ public class Application implements CommandLineRunner {
     @Autowired
     private Sender sender;
 
+    @Autowired
+    private AudioPlayer audioPlayer;
+
+    @Autowired
+    private AudioRecorder audioRecorder;
+
     public static void main(String[] args) throws Exception {
         SpringApplication application = new SpringApplication(Application.class);
         application.setApplicationContextClass(AnnotationConfigApplicationContext.class);
@@ -52,12 +58,10 @@ public class Application implements CommandLineRunner {
         }
         if (settings.isStartReceiver()) {
             receiver.start();
-            AudioPlayer audioPlayer = new AudioPlayer(receiver.getInputStream());
             audioPlayer.start();
         }
         if (settings.isStartSender()) {
             sender.start();
-            AudioRecorder audioRecorder = new AudioRecorder(sender.getOutputStream());
             Thread recorderThread = new Thread(audioRecorder);
             recorderThread.start();
             try {

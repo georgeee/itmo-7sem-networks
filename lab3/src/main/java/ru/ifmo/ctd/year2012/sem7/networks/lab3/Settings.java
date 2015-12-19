@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import javax.sound.sampled.AudioFormat;
 import java.net.*;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -77,6 +78,10 @@ public class Settings {
             selfAddresses = computeSelfAddresses();
         }
         groupAddress = InetAddress.getByName(groupAddressName);
+    }
+
+    public AudioFormat getAudioFormat(){
+        return new AudioFormat(16000.0f, 16, 2, true, false);
     }
 
     private Set<InetAddress> computeSelfAddresses() {
