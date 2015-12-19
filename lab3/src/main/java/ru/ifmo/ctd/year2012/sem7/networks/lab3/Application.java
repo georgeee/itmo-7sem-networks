@@ -8,11 +8,10 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.util.StreamUtils;
 import ru.ifmo.ctd.year2012.sem7.networks.lab3.transmission.Receiver;
 import ru.ifmo.ctd.year2012.sem7.networks.lab3.transmission.Sender;
 
-import java.io.*;
+import java.io.IOException;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.Enumeration;
@@ -53,20 +52,22 @@ public class Application implements CommandLineRunner {
         }
         if (settings.isStartReceiver()) {
             receiver.start();
+            AudioPlayer audioPlayer = new AudioPlayer(receiver.getInputStream());
+            audioPlayer.start();
         }
         if (settings.isStartSender()) {
             sender.start();
+            AudioRecorder audioRecorder = new AudioRecorder(sender.getOutputStream());
+            Thread recorderThread = new Thread(audioRecorder);
+            recorderThread.start();
+            try {
+                Thread.sleep(60000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            recorderThread.interrupt();
+            sender.interrupt();
         }
-        exampleReceiver();
-        exampleSender();
-    }
-
-    private void exampleSender() {
-        new AudioRecorder(sender.getOutputStream()).start();
-    }
-
-    private void exampleReceiver() {
-        new AudioPlayer(receiver.getInputStream()).start();
     }
 
 }

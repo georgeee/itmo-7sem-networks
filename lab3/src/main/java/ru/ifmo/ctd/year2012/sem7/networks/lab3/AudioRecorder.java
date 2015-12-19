@@ -10,14 +10,11 @@ import java.io.OutputStream;
 /**
  * Created by kerzok11 on 19.12.2015.
  */
-public class AudioRecorder extends Thread implements RecorderCallback {
+public class AudioRecorder implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(AudioRecorder.class);
     private static final int CHUNK_SIZE = 10240;
-    boolean finishFlag = false;
-    private OutputStream outputStream;
-    private TargetDataLine microphone;
-    private volatile boolean isStarted;
-    private volatile boolean isFinished;
+    private final OutputStream outputStream;
+    private final TargetDataLine microphone;
 
 
     public AudioRecorder(OutputStream outputStream) {
@@ -29,43 +26,24 @@ public class AudioRecorder extends Thread implements RecorderCallback {
             microphone.open(format);
         } catch (LineUnavailableException e) {
             log.error("Unable to find microphone", e);
-            microphone = null;
+            throw new IllegalStateException("Unable to find microphone", e);
         }
     }
 
     public void run() {
-        if (microphone == null) {
-            return;
-        }
-        while (true) {
-            if (isStarted) {
-                isStarted = false;
-                microphone.start();
-                while (!isFinished) {
-                    try {
-                        byte[] data = new byte[CHUNK_SIZE];
-                        while (!finishFlag) {
-                            int numBytesRead = microphone.read(data, 0, CHUNK_SIZE);
-                            outputStream.write(data);
-                            log.debug("[Recorder] read {} from microphone", numBytesRead);
-                        }
-                    } catch (IOException e) {
-                        log.error("error while transmit data", e);
-                    }
-                }
-                microphone.stop();
-                isFinished = false;
+        microphone.start();
+        byte[] data = new byte[CHUNK_SIZE];
+        while (!Thread.interrupted()) {
+            try {
+                int numBytesRead = microphone.read(data, 0, CHUNK_SIZE);
+                outputStream.write(data, 0, numBytesRead);
+                outputStream.flush();
+                log.debug("[Recorder] read {} from microphone", numBytesRead);
+            } catch (IOException e) {
+                log.error("[Recorder] error while transmitting data", e);
             }
         }
+        microphone.stop();
     }
 
-    @Override
-    public void startRecording() {
-        isStarted = true;
-    }
-
-    @Override
-    public void stopRecording() {
-        isFinished = true;
-    }
 }

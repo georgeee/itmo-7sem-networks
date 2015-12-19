@@ -11,9 +11,7 @@ import java.io.InputStream;
  */
 public class AudioPlayer extends Thread {
     private static final Logger log = LoggerFactory.getLogger(AudioPlayer.class);
-    private InputStream is;
-    private volatile byte[] data;
-    private volatile int numBytesRead;
+    private final InputStream is;
 
     public AudioPlayer(InputStream is) {
         this.is = is;
@@ -26,17 +24,18 @@ public class AudioPlayer extends Thread {
             AudioFormat format = new AudioFormat(16000.0f, 16, 2, true, bigEndian);
             DataLine.Info dataLineInfo = new DataLine.Info(SourceDataLine.class, format);
             SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(dataLineInfo);
+            System.out.println();
             speakers.open(format);
             speakers.start();
-            data = new byte[204800];
+            byte[] data = new byte[204800];
 
-            while (true) {
-                numBytesRead = is.read(data, 0, 1024);
+            while (!Thread.interrupted()) {
+                int numBytesRead = is.read(data, 0, 1024);
                 log.debug("[Player] received {} bytes", numBytesRead);
                 speakers.write(data, 0, numBytesRead);
             }
         } catch (LineUnavailableException | IOException e) {
-            e.printStackTrace();
+            log.error("[Player] error occurred", e);
         }
     }
 }
