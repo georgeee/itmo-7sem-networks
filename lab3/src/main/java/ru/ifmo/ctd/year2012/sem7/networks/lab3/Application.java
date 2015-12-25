@@ -41,30 +41,44 @@ public class Application implements CommandLineRunner {
             receiver.start();
             audioPlayer.start();
         }
+
         if (settings.isStartSender()) {
-            new Thread(() -> {
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
-                    br.lines().forEach(line -> {
-                        Thread recorderThread = new Thread(audioRecorder);
-                        if ("start".equals(line)) {
+            audioRecorder.start();
+            sender.start();
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    if ("start".equals(line)) {
+                        if (audioRecorder.isRunning()) {
+                            System.err.println("Already running");
+                        } else {
                             if (System.currentTimeMillis() - receiver.getLastReceived() > settings.getLastSendTimeout()) {
-                                sender.start();
-                                recorderThread.start();
+                                audioRecorder.setRunning(true);
                             } else {
                                 log.info("Somebody is holding the line, please try again a bit later");
                             }
-                        } else {
-                            if ("stop".equals(line)) {
-                                recorderThread.interrupt();
-                                sender.interrupt();
-                            }
                         }
-                    });
-                } catch (Exception e) {
-                    log.error("Error in sender example", e);
+                    } else if ("stop".equals(line)) {
+                        if (!audioRecorder.isRunning()) {
+                            System.err.println("Not running");
+                        } else {
+                            audioRecorder.setRunning(false);
+
+                        }
+                    } else if ("exit".equals(line)) {
+                        audioRecorder.setRunning(false);
+                        audioRecorder.interrupt();
+                        sender.interrupt();
+                        receiver.interrupt();
+                        audioPlayer.interrupt();
+                        System.exit(0);
+                        break;
+                    }
                 }
-            }).start();
+            } catch (Exception e) {
+                log.error("Error in sender example", e);
+            }
         }
     }
-    
+
 }
